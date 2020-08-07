@@ -146,7 +146,7 @@ def height2circuit(height):
 
     return qc
 
-def circuit2height(qc):
+def circuit2height(qc, log=False):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     the quantum circuit into which it has been encoded.
@@ -165,10 +165,12 @@ def circuit2height(qc):
     (Lx,Ly) = eval(qc.name)
     grid,_ = make_grid(Lx,Ly)
     
+    new_qc = qc.copy()
+    
     # extract the output probabilities for the circuit
     ket = quantum_info.Statevector(qc.data[0][0].params)
-    qc.data.pop(0)
-    ket = ket.evolve(qc)
+    new_qc.data.pop(0)
+    ket = ket.evolve(new_qc)
     p = ket.probabilities_dict()
     
     # set height to probs value, rescaled such that the maximum is 1
@@ -177,6 +179,19 @@ def circuit2height(qc):
     for bitstring in p:
         if bitstring in grid:
             height[grid[bitstring]] = p[bitstring]/max_h
+         
+    # take logs if required
+    if log:
+        # zero height is chosen to correspond to a probability
+        # 10 times less than the minimum non-zero probability
+        min_h = 1
+        for pos in height:
+            if height[pos]>0:
+                min_h = min(min_h,height[pos])
+        min_log = np.log( min_h/10 )
+        
+        for pos in height:
+            height[pos] = - (np.log(height[pos]) - min_log)/min_log        
                         
     return height
 
@@ -213,6 +228,15 @@ def height2image(height):
 
 
 def image2circuits(image):
+    """
+    Converts an image to a set of three circuits, with one corresponding to each RGB colour channel.
+    
+    Args:
+        image (Image): An RGB encoded image.
+        
+    Returns:
+        circuits (list): A list of quantum circuits encoding the image.
+    """
         
     # turn rgb into heights dictionaries
     Lx,Ly = image.size
@@ -230,11 +254,19 @@ def image2circuits(image):
     return circuits
 
 
-def circuits2image(circuits):
+def circuits2image(circuits, log=False):
+    """
+    Extracts an image from list of circuits encoding the RGB channels.
+    
+    Args:
+        circuits (list): A list of quantum circuits encoding the image.
         
+    Returns:
+        image (Image): An RGB encoded image.
+    """
     heights = []
     for qc in circuits:
-        heights.append( circuit2height(qc) )
+        heights.append( circuit2height(qc, log=log) )
        
     Lx,Ly = _get_size(heights[0])
     h_max = [max(height.values()) for height in heights]
