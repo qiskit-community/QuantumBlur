@@ -111,7 +111,7 @@ def make_grid(Lx,Ly=None):
             
     return grid, n
 
-def height2circuit(height):
+def height2circuit(height, log=False):
     """
     Converts a dictionary of heights (or brightnesses) on a grid into
     a quantum circuit.
@@ -120,6 +120,8 @@ def height2circuit(height):
         height (dict): A dictionary in which keys are coordinates
             for points on a grid, and the values are positive numbers of
             any type.
+        log (int): If given, a logarithmic encoding is used with the
+            given value as the base.
             
     Returns:
         qc (QuantumCircuit): A quantum circuit which encodes the
@@ -132,11 +134,15 @@ def height2circuit(height):
     
     # create required state vector
     state = [0]*(2**n)
+    max_h = max(height.values())
     for bitstring in grid:
         (x,y) = grid[bitstring]
         if (x,y) in height:
             h = height[x,y]
-            state[ int(bitstring,2) ] = np.sqrt( h )
+            if log:
+                state[ int(bitstring,2) ] = np.sqrt( log**(h/max_h) )
+            else:
+                state[ int(bitstring,2) ] = np.sqrt( h )
     state = normalize(state)
         
     # define and initialize quantum circuit            
@@ -146,14 +152,16 @@ def height2circuit(height):
 
     return qc
 
-def circuit2height(qc, log=False):
+def circuit2height(qc, log=None):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     the quantum circuit into which it has been encoded.
     
     Args:
-        qc (QuantumCircuit): A quantum circuit which encodes a
-        height dictionary.
+        qc (QuantumCircuit): A quantum circuit which encodes a height
+            dictionary.
+        log (int): If given, a logarithmic decoding is used with the
+            given value as the base.
             
     Returns:
         height (dict): A dictionary in which keys are coordinates
@@ -182,16 +190,11 @@ def circuit2height(qc, log=False):
          
     # take logs if required
     if log:
-        # zero height is chosen to correspond to a probability
-        # 10 times less than the minimum non-zero probability
-        min_h = 1
         for pos in height:
             if height[pos]>0:
-                min_h = min(min_h,height[pos])
-        min_log = np.log( min_h/10 )
-        
-        for pos in height:
-            height[pos] = - (np.log(height[pos]) - min_log)/min_log        
+                height[pos] = max( np.log(log*height[pos])/np.log(log), 0)
+            else:
+                height[pos] = 0
                         
     return height
 
@@ -227,12 +230,14 @@ def height2image(height):
     return image
 
 
-def image2circuits(image):
+def image2circuits(image, log=False):
     """
     Converts an image to a set of three circuits, with one corresponding to each RGB colour channel.
     
     Args:
         image (Image): An RGB encoded image.
+        log (int): If given, a logarithmic encoding is used with the
+            given value as the base.
         
     Returns:
         circuits (list): A list of quantum circuits encoding the image.
@@ -249,7 +254,7 @@ def image2circuits(image):
                 
     circuits = []
     for height in heights:
-        circuits.append( height2circuit(height) )
+        circuits.append( height2circuit(height, log=log) )
         
     return circuits
 
@@ -260,6 +265,8 @@ def circuits2image(circuits, log=False):
     
     Args:
         circuits (list): A list of quantum circuits encoding the image.
+        log (int): If given, a logarithmic decoding is used with the
+            given value as the base.
         
     Returns:
         image (Image): An RGB encoded image.
