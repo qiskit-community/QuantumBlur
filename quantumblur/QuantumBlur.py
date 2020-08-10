@@ -13,6 +13,7 @@
 # that they have been altered from the originals.
 
 import numpy as np
+from scipy.linalg import fractional_matrix_power
 
 from qiskit import *
 
@@ -111,7 +112,7 @@ def make_grid(Lx,Ly=None):
             
     return grid, n
 
-def height2circuit(height, log=False):
+def height2circuit(height, log=None):
     """
     Converts a dictionary of heights (or brightnesses) on a grid into
     a quantum circuit.
@@ -152,6 +153,49 @@ def height2circuit(height, log=False):
 
     return qc
 
+
+def _circuit2probs(qc):
+    
+    # blank copy of circuit
+    new_qc = qc.copy()
+    new_qc.data = []
+    
+    initial_ket = np.array([1])
+    for gate in qc.data:
+        if gate[0].name=='initialize':
+            initial_ket = np.kron(initial_ket,gate[0].params)
+        else:
+            new_qc.data.append(gate)
+    
+    ket = quantum_info.Statevector(initial_ket)
+    ket = ket.evolve(new_qc)
+    
+    return ket.probabilities_dict()
+    
+
+def _probs2height(qc, probs, log):
+    
+    # get grid info
+    (Lx,Ly) = eval(qc.name)
+    grid,_ = make_grid(Lx,Ly)
+    
+    # set height to probs value, rescaled such that the maximum is 1
+    max_h = max( probs.values() )   
+    height = {}
+    for bitstring in probs:
+        if bitstring in grid:
+            height[grid[bitstring]] = probs[bitstring]/max_h
+         
+    # take logs if required
+    if log:
+        for pos in height:
+            if height[pos]>0:
+                height[pos] = max( np.log(log*height[pos])/np.log(log), 0)
+            else:
+                height[pos] = 0
+                        
+    return height
+    
 def circuit2height(qc, log=None):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
@@ -168,35 +212,9 @@ def circuit2height(qc, log=None):
             for points on a grid, and the values are floats in the
             range 0 to 1.
     """
-
-    # get grid info
-    (Lx,Ly) = eval(qc.name)
-    grid,_ = make_grid(Lx,Ly)
     
-    new_qc = qc.copy()
-    
-    # extract the output probabilities for the circuit
-    ket = quantum_info.Statevector(qc.data[0][0].params)
-    new_qc.data.pop(0)
-    ket = ket.evolve(new_qc)
-    p = ket.probabilities_dict()
-    
-    # set height to probs value, rescaled such that the maximum is 1
-    max_h = max( p.values() )   
-    height = {}
-    for bitstring in p:
-        if bitstring in grid:
-            height[grid[bitstring]] = p[bitstring]/max_h
-         
-    # take logs if required
-    if log:
-        for pos in height:
-            if height[pos]>0:
-                height[pos] = max( np.log(log*height[pos])/np.log(log), 0)
-            else:
-                height[pos] = 0
-                        
-    return height
+    probs = _circuit2probs(qc)
+    return _probs2height(qc, probs, log)
 
 
 def height2image(height):
@@ -230,7 +248,7 @@ def height2image(height):
     return image
 
 
-def image2circuits(image, log=False):
+def image2circuits(image, log=None):
     """
     Converts an image to a set of three circuits, with one corresponding to each RGB colour channel.
     
@@ -259,7 +277,7 @@ def image2circuits(image, log=False):
     return circuits
 
 
-def circuits2image(circuits, log=False):
+def circuits2image(circuits, log=None):
     """
     Extracts an image from list of circuits encoding the RGB channels.
     
@@ -291,3 +309,51 @@ def circuits2image(circuits, log=False):
             image.putpixel((x,y), tuple(rgb) )
             
     return image
+
+
+def swap_heights(height0, height1, fraction, log=None):
+    
+    # convert heights to circuits
+    circuits = [height2circuit(height,log=log) for height in [height0,height1]]
+    
+    # make sure the quantum registers have distinct names
+    qregs = [qc.qregs[0].name for qc in circuits]
+    for j,qc in enumerate(circuits):
+        qc.qregs[0].name = str(j)
+    
+    # combine them (in parallel)
+    double_qc = circuits[0] + circuits[1]
+    
+    # apply the partial swap
+    U = np.array([
+        [1, 0, 0, 0],
+        [0, 0, 1, 0],
+        [0, 1, 0, 0],
+        [0, 0, 0, 1]
+    ])
+    U = fractional_matrix_power(U,fraction)
+    for q in range(double_qc.qregs[0].size):
+        double_qc.unitary(U, [double_qc.qregs[0][q],double_qc.qregs[1][q]], label='partial_swap')
+    
+    # get the probability distributions for each register
+    p = _circuit2probs(double_qc)
+    marginals = [{},{}]
+    nq0 = circuits[0].qregs[0].size
+    for string in p:
+        substrings = [string[0:nq0], string[nq0::]]
+        for j,substring in enumerate(substrings):
+            if substring in marginals[j]:
+                marginals[j][substring] += p[string]
+            else:
+                marginals[j][substring] = p[string]
+                
+    # restore the original names of the quantum registers
+    for j,qc in enumerate(circuits):
+        qc.qregs[0].name = qregs[j]
+    
+    # convert the prob dists to heights
+    new_heights = []
+    for j,marginal in enumerate(marginals):
+        new_heights.append( _probs2height(circuits[j],marginal,log) )
+        
+    return new_heights[0], new_heights[1]
