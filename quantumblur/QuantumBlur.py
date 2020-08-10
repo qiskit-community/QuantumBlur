@@ -248,6 +248,38 @@ def height2image(height):
     return image
 
 
+def _image2heights(image):
+
+    Lx,Ly = image.size
+    heights = [{} for j in range(3)]
+    for x in range(Lx):
+        for y in range(Ly):
+            rgb = image.getpixel((x,y))
+            for j in range(3):
+                heights[j][x,y] = rgb[j]
+                
+    return heights
+
+
+def _heights2image(heights):
+    
+    Lx,Ly = _get_size(heights[0])
+    h_max = [max(height.values()) for height in heights]
+    
+    image = Image.new('RGB',(Lx,Ly))
+    for x in range(Lx):
+        for y in range(Ly):
+            rgb = []
+            for j,height in enumerate(heights):
+                if (x,y) in height:
+                    h = height[x,y]/h_max[j]
+                else:
+                    h = 0
+                rgb.append( int(255*h) )
+            image.putpixel((x,y), tuple(rgb) )
+            
+    return image
+
 def image2circuits(image, log=None):
     """
     Converts an image to a set of three circuits, with one corresponding to each RGB colour channel.
@@ -261,15 +293,8 @@ def image2circuits(image, log=None):
         circuits (list): A list of quantum circuits encoding the image.
     """
         
-    # turn rgb into heights dictionaries
-    Lx,Ly = image.size
-    heights = [{} for j in range(3)]
-    for x in range(Lx):
-        for y in range(Ly):
-            rgb = image.getpixel((x,y))
-            for j in range(3):
-                heights[j][x,y] = rgb[j]
-                
+    heights = _image2heights(image)
+    
     circuits = []
     for height in heights:
         circuits.append( height2circuit(height, log=log) )
@@ -289,26 +314,12 @@ def circuits2image(circuits, log=None):
     Returns:
         image (Image): An RGB encoded image.
     """
+    
     heights = []
     for qc in circuits:
         heights.append( circuit2height(qc, log=log) )
        
-    Lx,Ly = _get_size(heights[0])
-    h_max = [max(height.values()) for height in heights]
-    
-    image = Image.new('RGB',(Lx,Ly))
-    for x in range(Lx):
-        for y in range(Ly):
-            rgb = []
-            for j,height in enumerate(heights):
-                if (x,y) in height:
-                    h = height[x,y]/h_max[j]
-                else:
-                    h = 0
-                rgb.append( int(255*h) )
-            image.putpixel((x,y), tuple(rgb) )
-            
-    return image
+    return _heights2image(heights)
 
 
 def swap_heights(height0, height1, fraction, log=None):
@@ -357,3 +368,24 @@ def swap_heights(height0, height1, fraction, log=None):
         new_heights.append( _probs2height(circuits[j],marginal,log) )
         
     return new_heights[0], new_heights[1]
+
+
+def swap_images(image0, image1, fraction, log=None):
+    
+    heights0 = _image2heights(image0)
+    heights1 = _image2heights(image1)
+    
+    new_heights0 = []
+    new_heights1 = []
+    for j in range(3):
+        nh0, nh1 = swap_heights(heights0[j], heights1[j], fraction, log=log)
+        new_heights0.append(nh0)
+        new_heights1.append(nh1)
+        
+    new_image0 = _heights2image(new_heights0)
+    new_image1 = _heights2image(new_heights1)
+    
+    return new_image0, new_image1
+    
+    
+    
