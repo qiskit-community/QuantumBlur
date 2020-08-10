@@ -388,4 +388,30 @@ def swap_images(image0, image1, fraction, log=None):
     return new_image0, new_image1
     
     
+def row_swap_images(image0, image1, fraction, log=None):
     
+    images = [image0, image1]
+    
+    Lx,Ly = images[0].size
+
+    # create separate images for each row
+    rows = [[],[]]
+    for j in range(2):
+        for y in range(Ly):   
+            rows[j].append(Image.new('RGB',(Lx,1)))
+            for x in range(Lx):
+                rows[j][y].putpixel((x,0),images[j].getpixel((x,y)))
+    
+    # CAN SHRINK IMAGES                
+    # do the swap on the row images
+    for y in range(Ly):
+        rows[0][y], rows[1][y] = swap_images(rows[0][y], rows[1][y], fraction, log=log)
+
+    # reconstruct the full images
+    new_images = [Image.new('RGB',(Lx,Ly)) for _ in range(2)]
+    for j in range(2):
+        for y in range(Ly):
+            for x in range(Lx):
+                new_images[j].putpixel((x,y),rows[j][y].getpixel((x,0)))
+
+    return new_images[0], new_images[1]
