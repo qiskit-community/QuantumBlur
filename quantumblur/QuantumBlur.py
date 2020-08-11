@@ -181,7 +181,7 @@ def _probs2height(qc, probs, log):
     
     # set height to probs value, rescaled such that the maximum is 1
     max_h = max( probs.values() )   
-    height = {}
+    height = {(x,y):0 for x in range(Lx) for y in range(Ly)}
     for bitstring in probs:
         if bitstring in grid:
             height[grid[bitstring]] = probs[bitstring]/max_h
@@ -402,7 +402,6 @@ def row_swap_images(image0, image1, fraction, log=None):
             for x in range(Lx):
                 rows[j][y].putpixel((x,0),images[j].getpixel((x,y)))
     
-    # CAN SHRINK IMAGES                
     # do the swap on the row images
     for y in range(Ly):
         rows[0][y], rows[1][y] = swap_images(rows[0][y], rows[1][y], fraction, log=log)
