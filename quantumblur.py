@@ -56,13 +56,52 @@ if simple_python:
         return img
         
 
-
 def _kron(vec0,vec1):
+    '''
+    Calculates the tensor product of two vectors.
+    '''
     new_vec = []
     for amp0 in vec0:
         for amp1 in vec1:
             new_vec.append(amp0*amp1)
     return new_vec
+
+
+def _combine_circuits(qc0,qc1):
+    '''
+    Combines a pair of MicroQiskit circuits in parallel.
+    Only works when they have no measuremnts.
+    '''
+    num_qubits = qc0.num_qubits + qc1.num_qubits
+    combined_qc = QuantumCircuit(num_qubits)
+    
+    kets = [None,None]
+    
+    for gate in qc0.data:
+        if gate[0]=='init':
+            kets[0] = gate[1]
+        else:
+            combined_qc.data.append(gate)
+    for gate in qc1.data:
+        if gate[0]=='init':
+            kets[1] = gate[1]
+        else:
+            new_gate = list(gate)
+            new_gate[-1] = gate[-1]+qc0.num_qubits
+            combined_qc.data.append(tuple(new_gate))
+          
+    ket = None
+    if kets[0] and kets[1]:
+        ket = _kron(kets[0], kets[1])
+    elif kets[0]:
+        ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
+    elif kets[1]:
+        ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
+        
+    if ket:
+        combined_qc.data = ['init', ket] + combined_qc.data
+        
+    return combined_qc
 
 
 def _get_size(height):
@@ -198,7 +237,11 @@ def height2circuit(height, log=None):
         
     # define and initialize quantum circuit            
     qc = QuantumCircuit(n,n)
-    qc.initialize(state,range(n))
+    if simple_python:
+        # microqiskit style
+        qc.initialize(state)
+    else:
+        qc.initialize(state,range(n))
     qc.name = '('+str(Lx)+','+str(Ly)+')'
 
     return qc
@@ -206,21 +249,24 @@ def height2circuit(height, log=None):
 
 def _circuit2probs(qc):
     
-    # blank copy of circuit
-    new_qc = qc.copy()
-    new_qc.data = []
+    if simple_python:
+        probs = simulate(qc,shots,get='probabilities_dict')
+    else:
+        # separate circuit and initialization
+        new_qc = qc.copy()
+        new_qc.data = []
+        initial_ket = [1]
+        for gate in qc.data:
+            if gate[0].name=='initialize':
+                initial_ket = _kron(initial_ket,gate[0].params)
+            else:
+                new_qc.data.append(gate)
+        # then run it
+        ket = quantum_info.Statevector(initial_ket)
+        ket = ket.evolve(new_qc)
+        probs = ket.probabilities_dict()
     
-    initial_ket = [1]
-    for gate in qc.data:
-        if gate[0].name=='initialize':
-            initial_ket = _kron(initial_ket,gate[0].params)
-        else:
-            new_qc.data.append(gate)
-    
-    ket = quantum_info.Statevector(initial_ket)
-    ket = ket.evolve(new_qc)
-    
-    return ket.probabilities_dict()
+    return probs
     
 
 def _probs2height(qc, probs, log):
@@ -266,6 +312,17 @@ def circuit2height(qc, log=None):
     probs = _circuit2probs(qc)
     return _probs2height(qc, probs, log)
 
+def combine_circuits(qc0,qc1):
+    
+    num_qubits = qc0l.num_qubits + qc1.num_qubits
+    combined_qc = QuantumCircuit(num_qubits)
+    
+    for gate in qc0:
+        combined_qc.append(gate)
+    for gate in qc1:
+        new_gate = gate
+        new_gate[-1] = gate[-1]+qc0l.num_qubits
+        combined_qc.append(new_gate)
 
 def swap_heights(height0, height1, fraction, log=None):
     
