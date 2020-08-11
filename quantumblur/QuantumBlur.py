@@ -12,12 +12,28 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-import numpy as np
-from scipy.linalg import fractional_matrix_power
 
-from qiskit import *
+import math
 
-from PIL import Image
+import sys
+python3 = sys.version[0]=='3'
+
+if python3:
+    from qiskit import *
+    from PIL import Image
+    import numpy as np
+    from scipy.linalg import fractional_matrix_power
+else:
+    from microqiskit import *
+
+
+def _kron(vec0,vec1):
+    new_vec = []
+    for amp0 in vec0:
+        for amp1 in vec1:
+            new_vec.append(amp0*amp1)
+    return new_vec
+
 
 def _get_size(height):
     Lx = 0
@@ -26,6 +42,7 @@ def _get_size(height):
         Lx = max(x+1,Lx)
         Ly = max(y+1,Ly)
     return Lx,Ly
+
 
 def make_line ( length ):
     """
@@ -41,7 +58,7 @@ def make_line ( length ):
     """
     
     # number of bits required
-    n = int(np.ceil(np.log(length)/np.log(2)))
+    n = int(math.ceil(math.log(length)/math.log(2)))
     
     # iteratively build list
     line = ['0','1']
@@ -57,6 +74,7 @@ def make_line ( length ):
             
     return line
 
+
 def normalize(ket):
     """
     Normalizes the given statevector.
@@ -69,10 +87,11 @@ def normalize(ket):
     """
     N = 0
     for amp in ket:
-        N += amp*np.conj(amp)
+        N += amp*amp.conjugate()
     for j,amp in enumerate(ket):
-        ket[j] = amp/np.sqrt(N)
+        ket[j] = amp/math.sqrt(N)
     return ket
+
 
 def make_grid(Lx,Ly=None):
     """
@@ -112,6 +131,7 @@ def make_grid(Lx,Ly=None):
             
     return grid, n
 
+
 def height2circuit(height, log=None):
     """
     Converts a dictionary of heights (or brightnesses) on a grid into
@@ -141,9 +161,9 @@ def height2circuit(height, log=None):
         if (x,y) in height:
             h = height[x,y]
             if log:
-                state[ int(bitstring,2) ] = np.sqrt( log**(h/max_h) )
+                state[ int(bitstring,2) ] = math.sqrt( log**(h/max_h) )
             else:
-                state[ int(bitstring,2) ] = np.sqrt( h )
+                state[ int(bitstring,2) ] = math.sqrt( h )
     state = normalize(state)
         
     # define and initialize quantum circuit            
@@ -160,10 +180,10 @@ def _circuit2probs(qc):
     new_qc = qc.copy()
     new_qc.data = []
     
-    initial_ket = np.array([1])
+    initial_ket = [1]
     for gate in qc.data:
         if gate[0].name=='initialize':
-            initial_ket = np.kron(initial_ket,gate[0].params)
+            initial_ket = _kron(initial_ket,gate[0].params)
         else:
             new_qc.data.append(gate)
     
@@ -190,7 +210,7 @@ def _probs2height(qc, probs, log):
     if log:
         for pos in height:
             if height[pos]>0:
-                height[pos] = max( np.log(log*height[pos])/np.log(log), 0)
+                height[pos] = max( math.log(log*height[pos])/math.log(log), 0)
             else:
                 height[pos] = 0
                         
@@ -217,111 +237,6 @@ def circuit2height(qc, log=None):
     return _probs2height(qc, probs, log)
 
 
-def height2image(height):
-    """
-    Converts a dictionary of heights (or brightnesses) on a grid to
-    an image.
-    
-    Args:
-        height (dict): A dictionary in which keys are coordinates
-                for points on a grid, and the values are positive
-                numbers of any type.
-                
-    Returns:
-        image (Image): Monochrome image for which the given height
-            dictionary determines the brightness of each pixel. The
-            maximum value in the height dictionary is always white.
-    """
-    
-    Lx,Ly = _get_size(height)
-    h_max = max(height.values())
-    
-    image = Image.new('L',(Lx,Ly))
-    for x in range(Lx):
-        for y in range(Ly):
-            if (x,y) in height:
-                h = height[x,y]/h_max
-            else:
-                h = 0
-            image.putpixel((x,y), int(255*h) )
-            
-    return image
-
-
-def _image2heights(image):
-
-    Lx,Ly = image.size
-    heights = [{} for j in range(3)]
-    for x in range(Lx):
-        for y in range(Ly):
-            rgb = image.getpixel((x,y))
-            for j in range(3):
-                heights[j][x,y] = rgb[j]
-                
-    return heights
-
-
-def _heights2image(heights):
-    
-    Lx,Ly = _get_size(heights[0])
-    h_max = [max(height.values()) for height in heights]
-    
-    image = Image.new('RGB',(Lx,Ly))
-    for x in range(Lx):
-        for y in range(Ly):
-            rgb = []
-            for j,height in enumerate(heights):
-                if (x,y) in height:
-                    h = height[x,y]/h_max[j]
-                else:
-                    h = 0
-                rgb.append( int(255*h) )
-            image.putpixel((x,y), tuple(rgb) )
-            
-    return image
-
-def image2circuits(image, log=None):
-    """
-    Converts an image to a set of three circuits, with one corresponding to each RGB colour channel.
-    
-    Args:
-        image (Image): An RGB encoded image.
-        log (int): If given, a logarithmic encoding is used with the
-            given value as the base.
-        
-    Returns:
-        circuits (list): A list of quantum circuits encoding the image.
-    """
-        
-    heights = _image2heights(image)
-    
-    circuits = []
-    for height in heights:
-        circuits.append( height2circuit(height, log=log) )
-        
-    return circuits
-
-
-def circuits2image(circuits, log=None):
-    """
-    Extracts an image from list of circuits encoding the RGB channels.
-    
-    Args:
-        circuits (list): A list of quantum circuits encoding the image.
-        log (int): If given, a logarithmic decoding is used with the
-            given value as the base.
-        
-    Returns:
-        image (Image): An RGB encoded image.
-    """
-    
-    heights = []
-    for qc in circuits:
-        heights.append( circuit2height(qc, log=log) )
-       
-    return _heights2image(heights)
-
-
 def swap_heights(height0, height1, fraction, log=None):
     
     # convert heights to circuits
@@ -336,15 +251,28 @@ def swap_heights(height0, height1, fraction, log=None):
     double_qc = circuits[0] + circuits[1]
     
     # apply the partial swap
-    U = np.array([
+    if python3:
+        U = np.array([
         [1, 0, 0, 0],
         [0, 0, 1, 0],
         [0, 1, 0, 0],
         [0, 0, 0, 1]
-    ])
-    U = fractional_matrix_power(U,fraction)
+        ])
+        U = fractional_matrix_power(U,fraction)
     for q in range(double_qc.qregs[0].size):
-        double_qc.unitary(U, [double_qc.qregs[0][q],double_qc.qregs[1][q]], label='partial_swap')
+        if python3:
+            double_qc.unitary(U, [double_qc.qregs[0][q],double_qc.qregs[1][q]], label='partial_swap')
+        else:
+            q0 = double_qc.qregs[0][q]
+            q1 = double_qc.qregs[1][q]
+            double_qc.cx(q1,q0)
+            double_qc.h(q1)
+            double_qc.cx(q0,q1)
+            double_qc.rz(-math.pi*fraction/2,q1)
+            double_qc.cx(q0,q1)
+            double_qc.rz(math.pi*fraction/2,q1)
+            double_qc.h(q1)
+            double_qc.cx(q1,q0)
     
     # get the probability distributions for each register
     p = _circuit2probs(double_qc)
@@ -369,48 +297,155 @@ def swap_heights(height0, height1, fraction, log=None):
         
     return new_heights[0], new_heights[1]
 
+if python3:
+    
+    def height2image(height):
+        """
+        Converts a dictionary of heights (or brightnesses) on a grid to
+        an image.
 
-def swap_images(image0, image1, fraction, log=None):
-    
-    heights0 = _image2heights(image0)
-    heights1 = _image2heights(image1)
-    
-    new_heights0 = []
-    new_heights1 = []
-    for j in range(3):
-        nh0, nh1 = swap_heights(heights0[j], heights1[j], fraction, log=log)
-        new_heights0.append(nh0)
-        new_heights1.append(nh1)
-        
-    new_image0 = _heights2image(new_heights0)
-    new_image1 = _heights2image(new_heights1)
-    
-    return new_image0, new_image1
-    
-    
-def row_swap_images(image0, image1, fraction, log=None):
-    
-    images = [image0, image1]
-    
-    Lx,Ly = images[0].size
+        Args:
+            height (dict): A dictionary in which keys are coordinates
+                    for points on a grid, and the values are positive
+                    numbers of any type.
 
-    # create separate images for each row
-    rows = [[],[]]
-    for j in range(2):
-        for y in range(Ly):   
-            rows[j].append(Image.new('RGB',(Lx,1)))
-            for x in range(Lx):
-                rows[j][y].putpixel((x,0),images[j].getpixel((x,y)))
-    
-    # do the swap on the row images
-    for y in range(Ly):
-        rows[0][y], rows[1][y] = swap_images(rows[0][y], rows[1][y], fraction, log=log)
+        Returns:
+            image (Image): Monochrome image for which the given height
+                dictionary determines the brightness of each pixel. The
+                maximum value in the height dictionary is always white.
+        """
 
-    # reconstruct the full images
-    new_images = [Image.new('RGB',(Lx,Ly)) for _ in range(2)]
-    for j in range(2):
+        Lx,Ly = _get_size(height)
+        h_max = max(height.values())
+
+        image = Image.new('L',(Lx,Ly))
+        for x in range(Lx):
+            for y in range(Ly):
+                if (x,y) in height:
+                    h = height[x,y]/h_max
+                else:
+                    h = 0
+                image.putpixel((x,y), int(255*h) )
+
+        return image
+
+
+    def _image2heights(image):
+
+        Lx,Ly = image.size
+        heights = [{} for j in range(3)]
+        for x in range(Lx):
+            for y in range(Ly):
+                rgb = image.getpixel((x,y))
+                for j in range(3):
+                    heights[j][x,y] = rgb[j]
+
+        return heights
+
+
+    def _heights2image(heights):
+
+        Lx,Ly = _get_size(heights[0])
+        h_max = [max(height.values()) for height in heights]
+
+        image = Image.new('RGB',(Lx,Ly))
+        for x in range(Lx):
+            for y in range(Ly):
+                rgb = []
+                for j,height in enumerate(heights):
+                    if (x,y) in height:
+                        h = height[x,y]/h_max[j]
+                    else:
+                        h = 0
+                    rgb.append( int(255*h) )
+                image.putpixel((x,y), tuple(rgb) )
+
+        return image
+
+
+    def swap_images(image0, image1, fraction, log=None):
+
+        heights0 = _image2heights(image0)
+        heights1 = _image2heights(image1)
+
+        new_heights0 = []
+        new_heights1 = []
+        for j in range(3):
+            nh0, nh1 = swap_heights(heights0[j], heights1[j], fraction, log=log)
+            new_heights0.append(nh0)
+            new_heights1.append(nh1)
+
+        new_image0 = _heights2image(new_heights0)
+        new_image1 = _heights2image(new_heights1)
+
+        return new_image0, new_image1
+
+    def image2circuits(image, log=None):
+        """
+        Converts an image to a set of three circuits, with one corresponding to each RGB colour channel.
+
+        Args:
+            image (Image): An RGB encoded image.
+            log (int): If given, a logarithmic encoding is used with the
+                given value as the base.
+
+        Returns:
+            circuits (list): A list of quantum circuits encoding the image.
+        """
+
+        heights = _image2heights(image)
+
+        circuits = []
+        for height in heights:
+            circuits.append( height2circuit(height, log=log) )
+
+        return circuits
+
+
+    def circuits2image(circuits, log=None):
+        """
+        Extracts an image from list of circuits encoding the RGB channels.
+
+        Args:
+            circuits (list): A list of quantum circuits encoding the image.
+            log (int): If given, a logarithmic decoding is used with the
+                given value as the base.
+
+        Returns:
+            image (Image): An RGB encoded image.
+        """
+
+        heights = []
+        for qc in circuits:
+            heights.append( circuit2height(qc, log=log) )
+
+        return _heights2image(heights)
+
+
+    def row_swap_images(image0, image1, fraction, log=None):
+
+        images = [image0, image1]
+
+        Lx,Ly = images[0].size
+
+        # create separate images for each row
+        rows = [[],[]]
+        for j in range(2):
+            for y in range(Ly):   
+                rows[j].append(Image.new('RGB',(Lx,1)))
+                for x in range(Lx):
+                    rows[j][y].putpixel((x,0),images[j].getpixel((x,y)))
+
+
+        # do the swap on the row images
         for y in range(Ly):
-            for x in range(Lx):
-                new_images[j].putpixel((x,y),rows[j][y].getpixel((x,0)))
+            rows[0][y], rows[1][y] = swap_images(rows[0][y], rows[1][y], fraction, log=log)
 
-    return new_images[0], new_images[1]
+        # reconstruct the full images
+        new_images = [Image.new('RGB',(Lx,Ly)) for _ in range(2)]
+        for j in range(2):
+            for y in range(Ly):
+                for x in range(Lx):
+                    new_images[j].putpixel((x,y),rows[j][y].getpixel((x,0)))
+
+        return new_images[0], new_images[1]
