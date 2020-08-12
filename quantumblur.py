@@ -34,7 +34,7 @@ if simple_python:
         def __init__(self):
             self.mode = None
             self.size = None
-            self.data = None
+            self.info = None
         def getpixel(self,xy):
             return self.info[xy]
         def putpixel(self, xy, value):
@@ -135,10 +135,10 @@ def make_line ( length ):
         # first append a reverse-ordered version of the current list
         line = line + line[::-1]
         # then add a '0' onto the end of all bit strings in the first half
-        for j in range(int(len(line)/2)):
+        for j in range(int(float(len(line)/2))):
             line[j] += '0'
         # and a '1' for the second half
-        for j in range(int(len(line)/2),int(len(line))):
+        for j in range(int(float(len(line)/2)),int(len(line))):
             line[j] += '1'
             
     return line
@@ -158,7 +158,7 @@ def normalize(ket):
     for amp in ket:
         N += amp*amp.conjugate()
     for j,amp in enumerate(ket):
-        ket[j] = amp/math.sqrt(N)
+        ket[j] = float(amp)/math.sqrt(N)
     return ket
 
 
@@ -230,7 +230,7 @@ def height2circuit(height, log=None):
         if (x,y) in height:
             h = height[x,y]
             if log:
-                state[ int(bitstring,2) ] = math.sqrt( log**(h/max_h) )
+                state[ int(bitstring,2) ] = math.sqrt( log**(float(h)/max_h) )
             else:
                 state[ int(bitstring,2) ] = math.sqrt( h )
     state = normalize(state)
@@ -250,7 +250,7 @@ def height2circuit(height, log=None):
 def _circuit2probs(qc):
     
     if simple_python:
-        probs = simulate(qc,shots,get='probabilities_dict')
+        probs = simulate(qc,get='probabilities_dict')
     else:
         # separate circuit and initialization
         new_qc = qc.copy()
@@ -280,7 +280,7 @@ def _probs2height(qc, probs, log):
     height = {(x,y):0 for x in range(Lx) for y in range(Ly)}
     for bitstring in probs:
         if bitstring in grid:
-            height[grid[bitstring]] = probs[bitstring]/max_h
+            height[grid[bitstring]] = float(probs[bitstring])/max_h
          
     # take logs if required
     if log:
@@ -312,30 +312,72 @@ def circuit2height(qc, log=None):
     probs = _circuit2probs(qc)
     return _probs2height(qc, probs, log)
 
-def combine_circuits(qc0,qc1):
+def _combine_circuits(qc0,qc1):
+    '''
+    Combines a pair of circuits in parallel.
+    For MicroQiskit, this only works if the circuits contain only
+    initialization.
+    '''
     
-    num_qubits = qc0l.num_qubits + qc1.num_qubits
-    combined_qc = QuantumCircuit(num_qubits)
+    if simple_python:
     
-    for gate in qc0:
-        combined_qc.append(gate)
-    for gate in qc1:
-        new_gate = gate
-        new_gate[-1] = gate[-1]+qc0l.num_qubits
-        combined_qc.append(new_gate)
+        # create a circuit with the combined number of qubits
+        num_qubits = qc0.num_qubits + qc1.num_qubits
+        combined_qc = QuantumCircuit(num_qubits)
 
+        # extract statevectors for any initialization commands
+        kets = [None,None]
+        for gate in qc0.data:
+            if gate[0]=='init':
+                kets[0] = gate[1]
+        for gate in qc1.data:
+            if gate[0]=='init':
+                kets[1] = gate[1]
+
+        # combine into a statevector for all the qubits
+        ket = None
+        if kets[0] and kets[1]:
+            ket = _kron(kets[0], kets[1])
+        elif kets[0]:
+            ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
+        elif kets[1]:
+            ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
+
+        # use this to initialize
+        if ket:
+            combined_qc.initialize(ket)
+                    
+    else:
+
+        circuits = [qc0,qc1]
+        
+        # make sure the quantum registers have distinct names
+        qregs = [qc.qregs[0].name for qc in circuits]
+        for j,qc in enumerate(circuits):
+            qc.qregs[0].name = str(j)
+
+        # combine the circuits in parallel
+        combined_qc = circuits[0] + circuits[1]
+        
+        # restore the original names of the quantum registers
+        for j,qc in enumerate(circuits):
+            qc.qregs[0].name = qregs[j]
+            
+    return combined_qc
+        
 def swap_heights(height0, height1, fraction, log=None):
+    
+    assert _get_size(height0)==_get_size(height1), \
+    "Objects to be swapped are not the same size"
     
     # convert heights to circuits
     circuits = [height2circuit(height,log=log) for height in [height0,height1]]
     
-    # make sure the quantum registers have distinct names
-    qregs = [qc.qregs[0].name for qc in circuits]
-    for j,qc in enumerate(circuits):
-        qc.qregs[0].name = str(j)
+    # get number of qubits in each circuit
+    num_qubits = circuits[0].num_qubits
     
-    # combine them (in parallel)
-    double_qc = circuits[0] + circuits[1]
+    # combine the two circuits into one (in parallel)
+    combined_qc = _combine_circuits(circuits[0], circuits[1])
     
     # apply the partial swap
     if not simple_python:
@@ -346,36 +388,34 @@ def swap_heights(height0, height1, fraction, log=None):
         [0, 0, 0, 1]
         ])
         U = fractional_matrix_power(U,fraction)
-    for q in range(double_qc.qregs[0].size):
+    for q in range(num_qubits):
         if not simple_python:
-            double_qc.unitary(U, [double_qc.qregs[0][q],double_qc.qregs[1][q]], label='partial_swap')
+            combined_qc.unitary(U, \
+                                [combined_qc.qregs[0][q],\
+                                 combined_qc.qregs[1][q]],\
+                                 label='partial_swap')
         else:
-            q0 = double_qc.qregs[0][q]
-            q1 = double_qc.qregs[1][q]
-            double_qc.cx(q1,q0)
-            double_qc.h(q1)
-            double_qc.cx(q0,q1)
-            double_qc.rz(-math.pi*fraction/2,q1)
-            double_qc.cx(q0,q1)
-            double_qc.rz(math.pi*fraction/2,q1)
-            double_qc.h(q1)
-            double_qc.cx(q1,q0)
+            q0 = q
+            q1 = num_qubits + q
+            combined_qc.cx(q1,q0)
+            combined_qc.h(q1)
+            combined_qc.cx(q0,q1)
+            combined_qc.rz(-math.pi*fraction/2,q1)
+            combined_qc.cx(q0,q1)
+            combined_qc.rz(math.pi*fraction/2,q1)
+            combined_qc.h(q1)
+            combined_qc.cx(q1,q0)
     
     # get the probability distributions for each register
-    p = _circuit2probs(double_qc)
+    p = _circuit2probs(combined_qc)
     marginals = [{},{}]
-    nq0 = circuits[0].qregs[0].size
     for string in p:
-        substrings = [string[0:nq0], string[nq0::]]
+        substrings = [string[0:num_qubits], string[num_qubits::]]
         for j,substring in enumerate(substrings):
             if substring in marginals[j]:
                 marginals[j][substring] += p[string]
             else:
                 marginals[j][substring] = p[string]
-                
-    # restore the original names of the quantum registers
-    for j,qc in enumerate(circuits):
-        qc.qregs[0].name = qregs[j]
     
     # convert the prob dists to heights
     new_heights = []
@@ -408,7 +448,7 @@ def height2image(height):
     for x in range(Lx):
         for y in range(Ly):
             if (x,y) in height:
-                h = height[x,y]/h_max
+                h = float(height[x,y])/h_max
             else:
                 h = 0
             image.putpixel((x,y), int(255*h) )
@@ -440,7 +480,7 @@ def _heights2image(heights):
             rgb = []
             for j,height in enumerate(heights):
                 if (x,y) in height:
-                    h = height[x,y]/h_max[j]
+                    h = float(height[x,y])/h_max[j]
                 else:
                     h = 0
                 rgb.append( int(255*h) )
