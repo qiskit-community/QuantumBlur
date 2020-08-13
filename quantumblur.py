@@ -13,9 +13,37 @@
 # that they have been altered from the originals.
 
 
+'''
+The imports that follow are highly non-standard and require some explanation. 
+
+This file is designed to run in both a modern, fully functioning Python
+environment, with Python 3.x and the ability to use external libraries.
+It is also designed to function using only the standard library (in
+addition to MicroQiskit) in any Python from 2.7 onwards.
+
+The deciding factor is whether Qiskit is available to be imported. If so,
+the following external libraries are required dependencies:
+
+qiskit
+numpy
+scipy
+PIL
+
+Otherwise, MicroQiskit will be used in place of Qiskit, and alternative
+techniques using only the standard library will be used in place of the
+other dependencies.
+
+More information on Qiskit can be found at
+
+https://qiskit.org
+
+and information on MicroQiskit can be found at
+
+https://github.com/qiskit-community/MicroQiskit
+'''
+
 import math
 
-# if Qiskit cannot be imported, use MicroQiskit and the standard libraries
 try:
     from qiskit import *
     simple_python = False
@@ -52,7 +80,9 @@ if simple_python:
             blank = 0
         elif mode=='RGB':
             blank = (0,0,0)
-        img.info = {(x,y):blank for x in range(size[0]) for y in range(size[1])}
+        img.info = {(x,y):blank\
+                    for x in range(size[0])\
+                    for y in range(size[1])}
         return img
         
 
@@ -69,48 +99,159 @@ def _kron(vec0,vec1):
 
 def _combine_circuits(qc0,qc1):
     '''
-    Combines a pair of MicroQiskit circuits in parallel.
-    Only works when they have no measuremnts.
+    Combines a pair of circuits in parallel.
+    
+    For MicroQiskit, this only works if the circuits contain only
+    initialization.
     '''
-    num_qubits = qc0.num_qubits + qc1.num_qubits
-    combined_qc = QuantumCircuit(num_qubits)
     
-    kets = [None,None]
+    if simple_python:
     
-    for gate in qc0.data:
-        if gate[0]=='init':
-            kets[0] = gate[1]
-        else:
-            combined_qc.data.append(gate)
-    for gate in qc1.data:
-        if gate[0]=='init':
-            kets[1] = gate[1]
-        else:
-            new_gate = list(gate)
-            new_gate[-1] = gate[-1]+qc0.num_qubits
-            combined_qc.data.append(tuple(new_gate))
-          
-    ket = None
-    if kets[0] and kets[1]:
-        ket = _kron(kets[0], kets[1])
-    elif kets[0]:
-        ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
-    elif kets[1]:
-        ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
+        warning = "Combined circuits should contain only initialization."
+    
+        # create a circuit with the combined number of qubits
+        num_qubits = qc0.num_qubits + qc1.num_qubits
+        combined_qc = QuantumCircuit(num_qubits)
+
+        # extract statevectors for any initialization commands
+        kets = [None,None]
+        for j,qc in enumerate([qc0, qc1]):
+            for gate in qc.data:
+                assert gate[0]=='init', warning
+                kets[j] = gate[1]
+
+        # combine into a statevector for all the qubits
+        ket = None
+        if kets[0] and kets[1]:
+            ket = _kron(kets[0], kets[1])
+        elif kets[0]:
+            ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
+        elif kets[1]:
+            ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
+
+        # use this to initialize
+        if ket:
+            combined_qc.initialize(ket)
+                    
+    else:
+
+        circuits = [qc0,qc1]
         
-    if ket:
-        combined_qc.data = ['init', ket] + combined_qc.data
+        # make sure the quantum registers have distinct names
+        qregs = [qc.qregs[0].name for qc in circuits]
+        for j,qc in enumerate(circuits):
+            qc.qregs[0].name = str(j)
+
+        # combine the circuits in parallel
+        combined_qc = circuits[0] + circuits[1]
         
+        # restore the original names of the quantum registers
+        for j,qc in enumerate(circuits):
+            qc.qregs[0].name = qregs[j]
+            
     return combined_qc
 
 
 def _get_size(height):
+    """
+    Determines the size of the grid for the given height map.
+    """
     Lx = 0
     Ly = 0
     for (x,y) in height:
         Lx = max(x+1,Lx)
         Ly = max(y+1,Ly)
     return Lx,Ly
+
+
+def _circuit2probs(qc):
+    """
+    Runs the given circuit, and returns the resulting probabilities.
+    """
+    if simple_python:
+        probs = simulate(qc,get='probabilities_dict')
+    else:
+        # separate circuit and initialization
+        new_qc = qc.copy()
+        new_qc.data = []
+        initial_ket = [1]
+        for gate in qc.data:
+            if gate[0].name=='initialize':
+                initial_ket = _kron(initial_ket,gate[0].params)
+            else:
+                new_qc.data.append(gate)
+        # then run it
+        ket = quantum_info.Statevector(initial_ket)
+        ket = ket.evolve(new_qc)
+        probs = ket.probabilities_dict()
+    
+    return probs
+    
+
+def _probs2height(qc, probs, log):
+    """
+    Determines the height map for a given circuit that encodes a height map
+    and the a corresponding set of probabilities.
+    """
+    # get grid info
+    (Lx,Ly) = eval(qc.name)
+    grid,_ = make_grid(Lx,Ly)
+    
+    # set height to probs value, rescaled such that the maximum is 1
+    max_h = max( probs.values() )   
+    height = {(x,y):0 for x in range(Lx) for y in range(Ly)}
+    for bitstring in probs:
+        if bitstring in grid:
+            height[grid[bitstring]] = float(probs[bitstring])/max_h
+         
+    # take logs if required
+    if log:
+        for pos in height:
+            if height[pos]>0:
+                height[pos] = max(math.log(log*height[pos])/math.log(log),0)
+            else:
+                height[pos] = 0
+                        
+    return height
+
+
+def _image2heights(image):
+    """
+    Converts an rgb image into a list of three height dictionaries, one for
+    each colour channgel.
+    """
+    Lx,Ly = image.size
+    heights = [{} for j in range(3)]
+    for x in range(Lx):
+        for y in range(Ly):
+            rgb = image.getpixel((x,y))
+            for j in range(3):
+                heights[j][x,y] = rgb[j]
+
+    return heights
+
+
+def _heights2image(heights):
+    """
+    Constructs an image from a set of three height dictionaries, one for each
+    colour channel.
+    """
+    Lx,Ly = _get_size(heights[0])
+    h_max = [max(height.values()) for height in heights]
+
+    image = newimage('RGB',(Lx,Ly))
+    for x in range(Lx):
+        for y in range(Ly):
+            rgb = []
+            for j,height in enumerate(heights):
+                if (x,y) in height:
+                    h = float(height[x,y])/h_max[j]
+                else:
+                    h = 0
+                rgb.append( int(255*h) )
+            image.putpixel((x,y), tuple(rgb) )
+
+    return image
 
 
 def make_line ( length ):
@@ -180,7 +321,6 @@ def make_grid(Lx,Ly=None):
         n (int): Length of the bit strings
         
     """
-    
     # set Ly if not supplied
     if not Ly:
         Ly = Lx
@@ -217,7 +357,6 @@ def height2circuit(height, log=None):
         qc (QuantumCircuit): A quantum circuit which encodes the
             given height dictionary.
     """
-    
     # get bit strings for the grid
     Lx,Ly = _get_size(height)
     grid, n = make_grid(Lx,Ly)
@@ -230,7 +369,7 @@ def height2circuit(height, log=None):
         if (x,y) in height:
             h = height[x,y]
             if log:
-                state[ int(bitstring,2) ] = math.sqrt( log**(float(h)/max_h) )
+                state[ int(bitstring,2) ] = math.sqrt(log**(float(h)/max_h))
             else:
                 state[ int(bitstring,2) ] = math.sqrt( h )
     state = normalize(state)
@@ -246,51 +385,6 @@ def height2circuit(height, log=None):
 
     return qc
 
-
-def _circuit2probs(qc):
-    
-    if simple_python:
-        probs = simulate(qc,get='probabilities_dict')
-    else:
-        # separate circuit and initialization
-        new_qc = qc.copy()
-        new_qc.data = []
-        initial_ket = [1]
-        for gate in qc.data:
-            if gate[0].name=='initialize':
-                initial_ket = _kron(initial_ket,gate[0].params)
-            else:
-                new_qc.data.append(gate)
-        # then run it
-        ket = quantum_info.Statevector(initial_ket)
-        ket = ket.evolve(new_qc)
-        probs = ket.probabilities_dict()
-    
-    return probs
-    
-
-def _probs2height(qc, probs, log):
-    
-    # get grid info
-    (Lx,Ly) = eval(qc.name)
-    grid,_ = make_grid(Lx,Ly)
-    
-    # set height to probs value, rescaled such that the maximum is 1
-    max_h = max( probs.values() )   
-    height = {(x,y):0 for x in range(Lx) for y in range(Ly)}
-    for bitstring in probs:
-        if bitstring in grid:
-            height[grid[bitstring]] = float(probs[bitstring])/max_h
-         
-    # take logs if required
-    if log:
-        for pos in height:
-            if height[pos]>0:
-                height[pos] = max( math.log(log*height[pos])/math.log(log), 0)
-            else:
-                height[pos] = 0
-                        
-    return height
     
 def circuit2height(qc, log=None):
     """
@@ -312,66 +406,29 @@ def circuit2height(qc, log=None):
     probs = _circuit2probs(qc)
     return _probs2height(qc, probs, log)
 
-def _combine_circuits(qc0,qc1):
-    '''
-    Combines a pair of circuits in parallel.
-    For MicroQiskit, this only works if the circuits contain only
-    initialization.
-    '''
-    
-    if simple_python:
-    
-        # create a circuit with the combined number of qubits
-        num_qubits = qc0.num_qubits + qc1.num_qubits
-        combined_qc = QuantumCircuit(num_qubits)
-
-        # extract statevectors for any initialization commands
-        kets = [None,None]
-        for gate in qc0.data:
-            if gate[0]=='init':
-                kets[0] = gate[1]
-        for gate in qc1.data:
-            if gate[0]=='init':
-                kets[1] = gate[1]
-
-        # combine into a statevector for all the qubits
-        ket = None
-        if kets[0] and kets[1]:
-            ket = _kron(kets[0], kets[1])
-        elif kets[0]:
-            ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
-        elif kets[1]:
-            ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
-
-        # use this to initialize
-        if ket:
-            combined_qc.initialize(ket)
-                    
-    else:
-
-        circuits = [qc0,qc1]
-        
-        # make sure the quantum registers have distinct names
-        qregs = [qc.qregs[0].name for qc in circuits]
-        for j,qc in enumerate(circuits):
-            qc.qregs[0].name = str(j)
-
-        # combine the circuits in parallel
-        combined_qc = circuits[0] + circuits[1]
-        
-        # restore the original names of the quantum registers
-        for j,qc in enumerate(circuits):
-            qc.qregs[0].name = qregs[j]
-            
-    return combined_qc
         
 def swap_heights(height0, height1, fraction, log=None):
+    """
+    Given a pair of height maps for the same sized grid, a set of partial
+    swaps is applied between corresponding qubits in each circuit.
     
+    Args:
+        height0, height1 (dict): Dictionaries in which keys are coordinates
+            for points on a grid, and the values are floats in the range 0
+            to 1.
+        fraction (float): Fraction of swap gates to apply.
+        log (int): If given, a logarithmic decoding is used with the
+            given value as the base.
+            
+    Returns:
+        new_height0, new_height1 (dict): As with the height inputs.
+    """
     assert _get_size(height0)==_get_size(height1), \
     "Objects to be swapped are not the same size"
     
     # convert heights to circuits
-    circuits = [height2circuit(height,log=log) for height in [height0,height1]]
+    circuits = [height2circuit(height,log=log)\
+                for height in [height0,height1]]
     
     # get number of qubits in each circuit
     num_qubits = circuits[0].num_qubits
@@ -440,7 +497,6 @@ def height2image(height):
             dictionary determines the brightness of each pixel. The
             maximum value in the height dictionary is always white.
     """
-
     Lx,Ly = _get_size(height)
     h_max = max(height.values())
 
@@ -456,41 +512,20 @@ def height2image(height):
     return image
 
 
-def _image2heights(image):
-
-    Lx,Ly = image.size
-    heights = [{} for j in range(3)]
-    for x in range(Lx):
-        for y in range(Ly):
-            rgb = image.getpixel((x,y))
-            for j in range(3):
-                heights[j][x,y] = rgb[j]
-
-    return heights
-
-
-def _heights2image(heights):
-
-    Lx,Ly = _get_size(heights[0])
-    h_max = [max(height.values()) for height in heights]
-
-    image = newimage('RGB',(Lx,Ly))
-    for x in range(Lx):
-        for y in range(Ly):
-            rgb = []
-            for j,height in enumerate(heights):
-                if (x,y) in height:
-                    h = float(height[x,y])/h_max[j]
-                else:
-                    h = 0
-                rgb.append( int(255*h) )
-            image.putpixel((x,y), tuple(rgb) )
-
-    return image
-
-
 def swap_images(image0, image1, fraction, log=None):
-
+    """
+    Given a pair of same sized grid images, a set of partial swaps is applied
+    between corresponding qubits in each circuit.
+    
+    Args:
+        image0, image1 (Image): RGB encoded images.
+        fraction (float): Fraction of swap gates to apply.
+        log (int): If given, a logarithmic decoding is used with the
+            given value as the base.
+            
+    Returns:
+        new_image0, new_image1 (Image): RGB encoded images.
+    """
     heights0 = _image2heights(image0)
     heights1 = _image2heights(image1)
 
@@ -508,7 +543,8 @@ def swap_images(image0, image1, fraction, log=None):
 
 def image2circuits(image, log=None):
     """
-    Converts an image to a set of three circuits, with one corresponding to each RGB colour channel.
+    Converts an image to a set of three circuits, with one corresponding to
+    each RGB colour channel.
 
     Args:
         image (Image): An RGB encoded image.
@@ -549,7 +585,20 @@ def circuits2image(circuits, log=None):
 
 
 def row_swap_images(image0, image1, fraction, log=None):
-
+    """
+    A variant of `swap_images` in which the swap process is done on each line
+    of the images individually, rather than with the images as a whole. This
+    makes it much faster.
+    
+    Args:
+        image0, image1 (Image): RGB encoded images.
+        fraction (float): Fraction of swap gates to apply.
+        log (int): If given, a logarithmic decoding is used with the
+            given value as the base.
+            
+    Returns:
+        new_image0, new_image1 (Image): RGB encoded images.
+    """
     images = [image0, image1]
 
     Lx,Ly = images[0].size
