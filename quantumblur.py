@@ -240,9 +240,11 @@ def _probs2height(qc, probs, log):
          
     # take logs if required
     if log:
+        min_h = min([height[pos] for pos in height if height[pos] !=0])
+        base = 1/min_h
         for pos in height:
             if height[pos]>0:
-                height[pos] = max(math.log(log*height[pos])/math.log(log),0)
+                height[pos] = max(math.log(height[pos]/min_h)/math.log(base),0)
             else:
                 height[pos] = 0
                         
@@ -375,7 +377,7 @@ def make_grid(Lx,Ly=None):
     return grid, n
 
 
-def height2circuit(height, log=None):
+def height2circuit(height, log=False):
     """
     Converts a dictionary of heights (or brightnesses) on a grid into
     a quantum circuit.
@@ -384,8 +386,7 @@ def height2circuit(height, log=None):
         height (dict): A dictionary in which keys are coordinates
             for points on a grid, and the values are positive numbers of
             any type.
-        log (int): If given, a logarithmic encoding is used with the
-            given value as the base.
+        log (bool): If given, a logarithmic encoding is used.
             
     Returns:
         qc (QuantumCircuit): A quantum circuit which encodes the
@@ -397,13 +398,16 @@ def height2circuit(height, log=None):
     
     # create required state vector
     state = [0]*(2**n)
-    max_h = max(height.values())
+    # if encoded logarithmically, the minimum non-zero value defines the base
+    if log:
+        min_h = min([height[pos] for pos in height if height[pos] !=0])
+        base = 1/min_h
     for bitstring in grid:
         (x,y) = grid[bitstring]
         if (x,y) in height:
             h = height[x,y]
             if log:
-                state[ int(bitstring,2) ] = math.sqrt(log**(float(h)/max_h))
+                state[ int(bitstring,2) ] = math.sqrt(base**(float(h)/min_h))
             else:
                 state[ int(bitstring,2) ] = math.sqrt( h )
     state = normalize(state)
@@ -420,7 +424,7 @@ def height2circuit(height, log=None):
     return qc
 
     
-def circuit2height(qc, log=None):
+def circuit2height(qc, log=False):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     the quantum circuit into which it has been encoded.
@@ -428,8 +432,7 @@ def circuit2height(qc, log=None):
     Args:
         qc (QuantumCircuit): A quantum circuit which encodes a height
             dictionary.
-        log (int): If given, a logarithmic decoding is used with the
-            given value as the base.
+        log (bool): If given, a logarithmic decoding is used.
             
     Returns:
         height (dict): A dictionary in which keys are coordinates
@@ -441,7 +444,7 @@ def circuit2height(qc, log=None):
     return _probs2height(qc, probs, log)
 
         
-def swap_heights(height0, height1, fraction, log=None):
+def swap_heights(height0, height1, fraction, log=False):
     """
     Given a pair of height maps for the same sized grid, a set of partial
     swaps is applied between corresponding qubits in each circuit.
@@ -451,8 +454,7 @@ def swap_heights(height0, height1, fraction, log=None):
             for points on a grid, and the values are floats in the range 0
             to 1.
         fraction (float): Fraction of swap gates to apply.
-        log (int): If given, a logarithmic decoding is used with the
-            given value as the base.
+        log (bool): If given, a logarithmic decoding is used.
             
     Returns:
         new_height0, new_height1 (dict): As with the height inputs.
@@ -546,7 +548,7 @@ def height2image(height):
     return image
 
 
-def swap_images(image0, image1, fraction, log=None):
+def swap_images(image0, image1, fraction, log=False):
     """
     Given a pair of same sized grid images, a set of partial swaps is applied
     between corresponding qubits in each circuit.
@@ -554,8 +556,7 @@ def swap_images(image0, image1, fraction, log=None):
     Args:
         image0, image1 (Image): RGB encoded images.
         fraction (float): Fraction of swap gates to apply.
-        log (int): If given, a logarithmic decoding is used with the
-            given value as the base.
+        log (bool): If given, a logarithmic decoding is used.
             
     Returns:
         new_image0, new_image1 (Image): RGB encoded images.
@@ -575,15 +576,14 @@ def swap_images(image0, image1, fraction, log=None):
 
     return new_image0, new_image1
 
-def image2circuits(image, log=None):
+def image2circuits(image, log=False):
     """
     Converts an image to a set of three circuits, with one corresponding to
     each RGB colour channel.
 
     Args:
         image (Image): An RGB encoded image.
-        log (int): If given, a logarithmic encoding is used with the
-            given value as the base.
+        log (bool): If given, a logarithmic encoding is used.
 
     Returns:
         circuits (list): A list of quantum circuits encoding the image.
@@ -598,14 +598,13 @@ def image2circuits(image, log=None):
     return circuits
 
 
-def circuits2image(circuits, log=None):
+def circuits2image(circuits, log=False):
     """
     Extracts an image from list of circuits encoding the RGB channels.
 
     Args:
         circuits (list): A list of quantum circuits encoding the image.
-        log (int): If given, a logarithmic decoding is used with the
-            given value as the base.
+        log (bool): If given, a logarithmic decoding is used.
 
     Returns:
         image (Image): An RGB encoded image.
@@ -618,7 +617,7 @@ def circuits2image(circuits, log=None):
     return _heights2image(heights)
 
 
-def row_swap_images(image0, image1, fraction, log=None):
+def row_swap_images(image0, image1, fraction, log=False):
     """
     A variant of `swap_images` in which the swap process is done on each line
     of the images individually, rather than with the images as a whole. This
@@ -627,8 +626,7 @@ def row_swap_images(image0, image1, fraction, log=None):
     Args:
         image0, image1 (Image): RGB encoded images.
         fraction (float): Fraction of swap gates to apply.
-        log (int): If given, a logarithmic decoding is used with the
-            given value as the base.
+        log (bool): If given, a logarithmic decoding is used.
             
     Returns:
         new_image0, new_image1 (Image): RGB encoded images.
