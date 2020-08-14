@@ -377,7 +377,7 @@ def make_grid(Lx,Ly=None):
     return grid, n
 
 
-def height2circuit(height, log=False):
+def height2circuit(height, log=False, eps=1e-2):
     """
     Converts a dictionary of heights (or brightnesses) on a grid into
     a quantum circuit.
@@ -400,7 +400,7 @@ def height2circuit(height, log=False):
     state = [0]*(2**n)
     # if encoded logarithmically, the minimum non-zero value defines the base
     if log:
-        min_h = min([height[pos] for pos in height if height[pos] !=0])
+        min_h = min([height[pos] for pos in height if height[pos] > eps])
         base = 1/min_h
     for bitstring in grid:
         (x,y) = grid[bitstring]
@@ -463,8 +463,7 @@ def swap_heights(height0, height1, fraction, log=False):
     "Objects to be swapped are not the same size"
     
     # convert heights to circuits
-    circuits = [height2circuit(height,log=log)\
-                for height in [height0,height1]]
+    circuits = [height2circuit(height) for height in [height0,height1]]
     
     # get number of qubits in each circuit
     num_qubits = circuits[0].num_qubits
