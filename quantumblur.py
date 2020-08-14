@@ -44,47 +44,81 @@ https://github.com/qiskit-community/MicroQiskit
 
 import math
 
+# determine whether qiskit can be used, or whether to default to
+# MicroQiskit and the standard library
 try:
-    from qiskit import *
+    from qiskit import QuantumCircuit, quantum_info
     simple_python = False
 except:
     print('Unable to import Qiskit, so MicroQiskit will be used instead')
-    from microqiskit import *
+    from microqiskit import QuantumCircuit, simulate
     simple_python = True
 
+    
+# this is overwritten by the PIL class if available
+class Image():
+    '''
+    A minimal reimplementation of the the PIL Image.Image class, to allow all
+    image based tools to function even when only the standard library is
+    available.
+    
+    To initialize an Image oject, use the `newimage` function.
+    
+    Attributes:
+        mode (str): If L, pixel values are a single integer. If 'RGB', they
+            are a tuple of three integers.
+        size (tuple): Specifies width and height.
+        info (dict): Dictionary with coordinates as keys and pixel values as
+            values.
+    '''
+    def __init__(self):
+        self.mode = None
+        self.size = None
+        self.info = None
+    def getpixel(self,xy):
+        '''
+        Returns pixel value at the given coordinate.
+        '''
+        return self.info[xy]
+    def putpixel(self, xy, value):
+        '''
+        Sets the pixel value at the given coordinate.
+        '''
+        self.info[xy] = value
+    def show(self):
+        '''
+        If the PIL version of this class is used, this function creates a PNG
+        image and displays it. This version instead simply prints all
+        coordinates and pixel values.
+        '''
+        for x in range(self.size[0]):
+            for y in range(self.size[1]):
+                print('('+str(x)+','+str(y)+')'+': '+str(self.info[x,y]))
+
+# this is overwritten by the PIL function if available               
+def newimage(mode, size):
+    '''
+    A minimal reimplementation of the the PIL Image.new function.
+    Creates an Image object for the given mode and size.
+    '''
+    img = Image()
+    img.mode = mode
+    img.size = size
+    if mode=='L':
+        blank = 0
+    elif mode=='RGB':
+        blank = (0,0,0)
+    img.info = {(x,y):blank\
+                for x in range(size[0])\
+                for y in range(size[1])}
+    return img
+
+# if external libraries can be used, import the ones we need
 if not simple_python:
     import numpy as np
     from scipy.linalg import fractional_matrix_power
     from PIL.Image import new as newimage, Image
-    
-if simple_python:
-    class Image():
-        def __init__(self):
-            self.mode = None
-            self.size = None
-            self.info = None
-        def getpixel(self,xy):
-            return self.info[xy]
-        def putpixel(self, xy, value):
-            self.info[xy] = value
-        def show(self):
-            for x in range(self.size[0]):
-                for y in range(self.size[1]):
-                    print('('+str(x)+','+str(y)+')'+': '+str(self.info[x,y]))
 
-    def newimage(mode, size):
-        img = Image()
-        img.mode = mode
-        img.size = size
-        if mode=='L':
-            blank = 0
-        elif mode=='RGB':
-            blank = (0,0,0)
-        img.info = {(x,y):blank\
-                    for x in range(size[0])\
-                    for y in range(size[1])}
-        return img
-        
 
 def _kron(vec0,vec1):
     '''
