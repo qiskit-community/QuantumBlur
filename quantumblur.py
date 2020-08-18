@@ -13,7 +13,7 @@
 # that they have been altered from the originals.
 
 
-'''
+"""
 The imports that follow are highly non-standard and require some explanation. 
 
 This file is designed to run in both a modern, fully functioning Python
@@ -40,7 +40,7 @@ https://qiskit.org
 and information on MicroQiskit can be found at
 
 https://github.com/qiskit-community/MicroQiskit
-'''
+"""
 
 import math
 
@@ -57,7 +57,7 @@ except:
     
 # this is overwritten by the PIL class if available
 class Image():
-    '''
+    """
     A minimal reimplementation of the the PIL Image.Image class, to allow all
     image based tools to function even when only the standard library is
     available.
@@ -70,37 +70,39 @@ class Image():
         size (tuple): Specifies width and height.
         info (dict): Dictionary with coordinates as keys and pixel values as
             values.
-    '''
+    """
     def __init__(self):
         self.mode = None
         self.size = None
         self.info = None
     def getpixel(self,xy):
-        '''
+        """
         Returns pixel value at the given coordinate.
-        '''
+        """
         return self.info[xy]
     def putpixel(self, xy, value):
-        '''
+        """
         Sets the pixel value at the given coordinate.
-        '''
+        """
         self.info[xy] = value
     def show(self):
-        '''
+        """
         If the PIL version of this class is used, this function creates a PNG
         image and displays it. This version instead simply prints all
         coordinates and pixel values.
-        '''
+        """
         for x in range(self.size[0]):
             for y in range(self.size[1]):
                 print('('+str(x)+','+str(y)+')'+': '+str(self.info[x,y]))
+    def resize(self, new_size, method):
+        print("This functionality has not been implemented.")
 
 # this is overwritten by the PIL function if available               
 def newimage(mode, size):
-    '''
+    """
     A minimal reimplementation of the the PIL Image.new function.
     Creates an Image object for the given mode and size.
-    '''
+    """
     img = Image()
     img.mode = mode
     img.size = size
@@ -121,9 +123,9 @@ if not simple_python:
 
 
 def _kron(vec0,vec1):
-    '''
+    """
     Calculates the tensor product of two vectors.
-    '''
+    """
     new_vec = []
     for amp0 in vec0:
         for amp1 in vec1:
@@ -132,12 +134,12 @@ def _kron(vec0,vec1):
 
 
 def _combine_circuits(qc0,qc1):
-    '''
+    """
     Combines a pair of circuits in parallel.
     
     For MicroQiskit, this only works if the circuits contain only
     initialization.
-    '''
+    """
     
     if simple_python:
     
@@ -220,35 +222,6 @@ def _circuit2probs(qc):
         probs = ket.probabilities_dict()
     
     return probs
-    
-
-def _probs2height(qc, probs, log):
-    """
-    Determines the height map for a given circuit that encodes a height map
-    and the a corresponding set of probabilities.
-    """
-    # get grid info
-    (Lx,Ly) = eval(qc.name)
-    grid,_ = make_grid(Lx,Ly)
-    
-    # set height to probs value, rescaled such that the maximum is 1
-    max_h = max( probs.values() )   
-    height = {(x,y):0 for x in range(Lx) for y in range(Ly)}
-    for bitstring in probs:
-        if bitstring in grid:
-            height[grid[bitstring]] = float(probs[bitstring])/max_h
-         
-    # take logs if required
-    if log:
-        min_h = min([height[pos] for pos in height if height[pos] !=0])
-        base = 1/min_h
-        for pos in height:
-            if height[pos]>0:
-                height[pos] = max(math.log(height[pos]/min_h)/math.log(base),0)
-            else:
-                height[pos] = 0
-                        
-    return height
 
 
 def _image2heights(image):
@@ -398,9 +371,13 @@ def height2circuit(height, log=False, eps=1e-2):
     
     # create required state vector
     state = [0]*(2**n)
-    # if encoded logarithmically, the minimum non-zero value defines the base
     if log:
+        # normalize heights
+        max_h = max(height.values())
+        height = {pos:height[pos]/max_h for pos in height}
+        # find minimum (not too small) normalized height
         min_h = min([height[pos] for pos in height if height[pos] > eps])
+        # this minimum value defines the base
         base = 1/min_h
     for bitstring in grid:
         (x,y) = grid[bitstring]
@@ -423,6 +400,50 @@ def height2circuit(height, log=False, eps=1e-2):
 
     return qc
 
+
+def probs2height(qc, probs, log=False):
+    """
+    Extracts a dictionary of heights (or brightnesses) on a grid from
+    a set of probabilities for the output of a quantum circuit into
+    which the height map has been encoded.
+    
+    Args:
+        qc (QuantumCircuit): A quantum circuit which encodes a height
+            dictionary.
+        probs (dict): A dictionary with results from running the circuit.
+            With bit strings as keys and probabilities as values.
+        log (bool): If given, a logarithmic decoding is used.
+            
+    Returns:
+        height (dict): A dictionary in which keys are coordinates
+            for points on a grid, and the values are floats in the
+            range 0 to 1.
+    """
+    
+    # get grid info
+    (Lx,Ly) = eval(qc.name)
+    grid,_ = make_grid(Lx,Ly)
+    
+    # set height to probs value, rescaled such that the maximum is 1
+    max_h = max( probs.values() )   
+    height = {(x,y):0 for x in range(Lx) for y in range(Ly)}
+    for bitstring in probs:
+        if bitstring in grid:
+            height[grid[bitstring]] = float(probs[bitstring])/max_h
+         
+    # take logs if required
+    if log:
+        min_h = min([height[pos] for pos in height if height[pos] !=0])
+        alt_min_h = min([height[pos] for pos in height])
+        base = 1/min_h
+        for pos in height:
+            if height[pos]>0:
+                height[pos] = max(math.log(height[pos]/min_h)/math.log(base),0)
+            else:
+                height[pos] = 0
+                        
+    return height
+
     
 def circuit2height(qc, log=False):
     """
@@ -441,7 +462,7 @@ def circuit2height(qc, log=False):
     """
     
     probs = _circuit2probs(qc)
-    return _probs2height(qc, probs, log)
+    return probs2height(qc, probs, log)
 
         
 def swap_heights(height0, height1, fraction, log=False):
@@ -512,7 +533,7 @@ def swap_heights(height0, height1, fraction, log=False):
     # convert the prob dists to heights
     new_heights = []
     for j,marginal in enumerate(marginals):
-        new_heights.append( _probs2height(circuits[j],marginal,log) )
+        new_heights.append( probs2height(circuits[j],marginal,log) )
         
     return new_heights[0], new_heights[1]
 
