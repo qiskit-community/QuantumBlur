@@ -68,23 +68,27 @@ class Image():
         mode (str): If L, pixel values are a single integer. If 'RGB', they
             are a tuple of three integers.
         size (tuple): Specifies width and height.
-        info (dict): Dictionary with coordinates as keys and pixel values as
-            values.
     """
     def __init__(self):
         self.mode = None
         self.size = None
-        self.info = None
+        self._image_dict = None
     def getpixel(self,xy):
         """
         Returns pixel value at the given coordinate.
         """
-        return self.info[xy]
+        return self._image_dict[xy]
     def putpixel(self, xy, value):
         """
         Sets the pixel value at the given coordinate.
         """
-        self.info[xy] = value
+        self._image_dict[xy] = value
+    def todict(self):
+        """
+        Returns dictionary of pixel values with coordinates as keys.
+        Not present in PIL version.
+        """
+        return self._image_dict
     def show(self):
         """
         If the PIL version of this class is used, this function creates a PNG
@@ -93,7 +97,7 @@ class Image():
         """
         for x in range(self.size[0]):
             for y in range(self.size[1]):
-                print('('+str(x)+','+str(y)+')'+': '+str(self.info[x,y]))
+                print('('+str(x)+','+str(y)+')'+': '+str(self._image_dict[x,y]))
     def resize(self, new_size, method):
         print("This functionality has not been implemented.")
 
@@ -110,7 +114,7 @@ def newimage(mode, size):
         blank = 0
     elif mode=='RGB':
         blank = (0,0,0)
-    img.info = {(x,y):blank\
+    img._image_dict = {(x,y):blank\
                 for x in range(size[0])\
                 for y in range(size[1])}
     return img
