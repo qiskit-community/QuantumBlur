@@ -289,10 +289,10 @@ def make_line ( length ):
         # first append a reverse-ordered version of the current list
         line = line + line[::-1]
         # then add a '0' onto the end of all bit strings in the first half
-        for j in range(int(float(len(line)/2))):
+        for j in range(int(float(len(line))/2)):
             line[j] += '0'
         # and a '1' for the second half
-        for j in range(int(float(len(line)/2)),int(len(line))):
+        for j in range(int(float(len(line))/2),int(len(line))):
             line[j] += '1'
             
     return line
@@ -378,11 +378,11 @@ def height2circuit(height, log=False, eps=1e-2):
     if log:
         # normalize heights
         max_h = max(height.values())
-        height = {pos:height[pos]/max_h for pos in height}
+        height = {pos:float(height[pos])/max_h for pos in height}
         # find minimum (not too small) normalized height
         min_h = min([height[pos] for pos in height if height[pos] > eps])
         # this minimum value defines the base
-        base = 1/min_h
+        base = 1.0/min_h
     for bitstring in grid:
         (x,y) = grid[bitstring]
         if (x,y) in height:
