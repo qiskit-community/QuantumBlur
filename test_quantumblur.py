@@ -19,7 +19,7 @@ def _dict2image(pixel):
     return img
 
 
-def partial_x(qc,fraction):
+def _partial_x(qc,fraction):
     for j in range(qc.num_qubits):
         qc.rx(fraction,j)
 
@@ -40,8 +40,7 @@ def height_rotation():
             assert abs(h[pos]-new_h[pos])<eps
 
         # check that the rotation works correctly
-        for q in range(qc.num_qubits):
-            qc.rx(0.5,q)  
+        _partial_x(qc,0.5)  
         new_h = circuit2height(qc)
         for pos in h:
             assert abs(rotated[j][pos]-new_h[pos])<eps
@@ -69,7 +68,7 @@ def image_rotation():
     # rotate image defined by pixel values in p0
     qcs = image2circuits(_dict2image(p0))
     for qc in qcs:
-        partial_x(qc,0.5)
+        _partial_x(qc,0.5)
     new_img0 = circuits2image(qcs)
     
     # this should yield the pixel values of p1
@@ -110,10 +109,46 @@ def row_image_swap():
     print('Test for row swapping images completed successfully!')
 
 
+def log_image():
+    
+    p_log = {(0, 0): (127, 114, 76), (0, 1): (127, 113, 75), (0, 2): (85, 79, 52), (0, 3): (73, 62, 40), (0, 4): (160, 94, 56), (0, 5): (139, 126, 89), (0, 6): (123, 117, 83), (0, 7): (109, 100, 69), (1, 0): (122, 112, 75), (1, 1): (82, 73, 47), (1, 2): (22, 13, 5), (1, 3): (194, 94, 49), (1, 4): (255, 125, 67), (1, 5): (166, 111, 70), (1, 6): (119, 114, 80), (1, 7): (108, 102, 70), (2, 0): (84, 75, 51), (2, 1): (20, 13, 9), (2, 2): (67, 35, 19), (2, 3): (120, 92, 79), (2, 4): (190, 108, 68), (2, 5): (103, 52, 26), (2, 6): (109, 97, 70), (2, 7): (21, 38, 31), (3, 0): (85, 71, 47), (3, 1): (4, 7, 9), (3, 2): (129, 69, 38), (3, 3): (191, 104, 59), (3, 4): (148, 74, 41), (3, 5): (129, 68, 34), (3, 6): (61, 48, 33), (3, 7): (61, 73, 67), (4, 0): (109, 95, 67), (4, 1): (3, 6, 4), (4, 2): (100, 52, 28), (4, 3): (212, 117, 63), (4, 4): (154, 79, 44), (4, 5): (121, 64, 33), (4, 6): (48, 41, 31), (4, 7): (39, 55, 51), (5, 0): (156, 156, 140), (5, 1): (0, 0, 0), (5, 2): (173, 83, 43), (5, 3): (117, 85, 71), (5, 4): (178, 105, 70), (5, 5): (129, 65, 33), (5, 6): (98, 87, 61), (5, 7): (22, 39, 32), (6, 0): (234, 244, 252), (6, 1): (92, 91, 65), (6, 2): (20, 13, 9), (6, 3): (178, 87, 46), (6, 4): (249, 123, 67), (6, 5): (179, 113, 70), (6, 6): (119, 112, 79), (6, 7): (106, 106, 71), (7, 0): (244, 255, 255), (7, 1): (184, 183, 146), (7, 2): (178, 173, 152), (7, 3): (35, 40, 20), (7, 4): (115, 86, 33), (7, 5): (151, 131, 93), (7, 6): (123, 116, 81), (7, 7): (122, 136, 83)}
+    
+    # log encode and decode image defined by pixel values in p0
+    qcs = image2circuits(_dict2image(p0),log=True)
+    new_img0 = circuits2image(qcs,log=True)
+    
+    # this should yield the pixel values of p_log
+    for x in range(8):
+        for y in range(8):
+            assert new_img0.getpixel((x,y))==p_log[x,y]
+                
+    print('Test for logarithmic encoding and decoding completed successfully!') 
+
+def odd_size():
+
+    # we'll encode and decode a height map that is not square, and whose height and width are not powers of 2
+    h = {}
+    for x in range(3):
+        for y in range(5):
+            h[x,y] = (x+y)/4
+    
+    # encode and decode height map
+    qc = height2circuit(h)
+    new_h = circuit2height(qc)
+    
+    # check that the height comes out of the circuit unchanged
+    for pos in h:
+        assert abs(h[pos]-new_h[pos])<eps
+            
+    print('Test for oddly sized height map completed successfully!')
+
+    
 height_rotation()
 height_swap()
 image_rotation()
 image_swap()
 row_image_swap()
+log_image()
+odd_size()
 
-print(':)')
+print(':)\n')
