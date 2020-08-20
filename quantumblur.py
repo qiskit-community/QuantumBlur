@@ -137,61 +137,6 @@ def _kron(vec0,vec1):
     return new_vec
 
 
-def _combine_circuits(qc0,qc1):
-    """
-    Combines a pair of circuits in parallel.
-    
-    For MicroQiskit, this only works if the circuits contain only
-    initialization.
-    """
-    
-    if simple_python:
-    
-        warning = "Combined circuits should contain only initialization."
-    
-        # create a circuit with the combined number of qubits
-        num_qubits = qc0.num_qubits + qc1.num_qubits
-        combined_qc = QuantumCircuit(num_qubits)
-
-        # extract statevectors for any initialization commands
-        kets = [None,None]
-        for j,qc in enumerate([qc0, qc1]):
-            for gate in qc.data:
-                assert gate[0]=='init', warning
-                kets[j] = gate[1]
-
-        # combine into a statevector for all the qubits
-        ket = None
-        if kets[0] and kets[1]:
-            ket = _kron(kets[0], kets[1])
-        elif kets[0]:
-            ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
-        elif kets[1]:
-            ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
-
-        # use this to initialize
-        if ket:
-            combined_qc.initialize(ket)
-                    
-    else:
-
-        circuits = [qc0,qc1]
-        
-        # make sure the quantum registers have distinct names
-        qregs = [qc.qregs[0].name for qc in circuits]
-        for j,qc in enumerate(circuits):
-            qc.qregs[0].name = str(j)
-
-        # combine the circuits in parallel
-        combined_qc = circuits[0] + circuits[1]
-        
-        # restore the original names of the quantum registers
-        for j,qc in enumerate(circuits):
-            qc.qregs[0].name = qregs[j]
-            
-    return combined_qc
-
-
 def _get_size(height):
     """
     Determines the size of the grid for the given height map.
@@ -415,7 +360,7 @@ def probs2height(qc, probs, log=False):
         qc (QuantumCircuit): A quantum circuit which encodes a height
             dictionary.
         probs (dict): A dictionary with results from running the circuit.
-            With bit strings as keys and probabilities as values.
+            With bit strings as keys and either probabilities or counts as               values.
         log (bool): If given, a logarithmic decoding is used.
             
     Returns:
@@ -468,35 +413,69 @@ def circuit2height(qc, log=False):
     probs = _circuit2probs(qc)
     return probs2height(qc, probs, log)
 
+
+def combine_circuits(qc0,qc1):
+    """
+    Combines a pair of circuits in parallel.
+    
+    For MicroQiskit, this only works if the circuits contain only
+    initialization.
+    """
+    
+    if simple_python:
+    
+        warning = "Combined circuits should contain only initialization."
+    
+        # create a circuit with the combined number of qubits
+        num_qubits = qc0.num_qubits + qc1.num_qubits
+        combined_qc = QuantumCircuit(num_qubits)
+
+        # extract statevectors for any initialization commands
+        kets = [None,None]
+        for j,qc in enumerate([qc0, qc1]):
+            for gate in qc.data:
+                assert gate[0]=='init', warning
+                kets[j] = gate[1]
+
+        # combine into a statevector for all the qubits
+        ket = None
+        if kets[0] and kets[1]:
+            ket = _kron(kets[0], kets[1])
+        elif kets[0]:
+            ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
+        elif kets[1]:
+            ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
+
+        # use this to initialize
+        if ket:
+            combined_qc.initialize(ket)
+                    
+    else:
+
+        circuits = [qc0,qc1]
         
-def swap_heights(height0, height1, fraction, log=False):
-    """
-    Given a pair of height maps for the same sized grid, a set of partial
-    swaps is applied between corresponding qubits in each circuit.
-    
-    Args:
-        height0, height1 (dict): Dictionaries in which keys are coordinates
-            for points on a grid, and the values are floats in the range 0
-            to 1.
-        fraction (float): Fraction of swap gates to apply.
-        log (bool): If given, a logarithmic decoding is used.
+        # make sure the quantum registers have distinct names
+        qregs = [qc.qregs[0].name for qc in circuits]
+        for j,qc in enumerate(circuits):
+            qc.qregs[0].name = str(j)
+
+        # combine the circuits in parallel
+        combined_qc = circuits[0] + circuits[1]
+        
+        # restore the original names of the quantum registers
+        for j,qc in enumerate(circuits):
+            qc.qregs[0].name = qregs[j]
             
-    Returns:
-        new_height0, new_height1 (dict): As with the height inputs.
+    return combined_qc
+
+
+def partialswap(combined_qc, fraction):
     """
-    assert _get_size(height0)==_get_size(height1), \
-    "Objects to be swapped are not the same size"
+    Apply a partial swap to a given combined circuit (made up of two equal
+    sized circuits combined in parallel) by the given fraction.
+    """
+    num_qubits = int(combined_qc.num_qubits/2)
     
-    # convert heights to circuits
-    circuits = [height2circuit(height) for height in [height0,height1]]
-    
-    # get number of qubits in each circuit
-    num_qubits = circuits[0].num_qubits
-    
-    # combine the two circuits into one (in parallel)
-    combined_qc = _combine_circuits(circuits[0], circuits[1])
-    
-    # apply the partial swap
     if not simple_python:
         U = np.array([
         [1, 0, 0, 0],
@@ -521,20 +500,58 @@ def swap_heights(height0, height1, fraction, log=False):
             combined_qc.cx(q0,q1)
             combined_qc.rz(math.pi*fraction/2,q1)
             combined_qc.h(q1)
-            combined_qc.cx(q1,q0)
+            combined_qc.cx(q1,q0)  
+
+            
+def probs2marginals(combined_qc, probs):
+    """
+    Given a probability distribution corresponding to a given combined
+    circuit (made up of two equal sized circuits combined in parallel),
+    this function returns the two marginals for each subcircuit.
+    """
+    num_qubits = int(combined_qc.num_qubits/2)
     
-    # get the probability distributions for each register
-    p = _circuit2probs(combined_qc)
     marginals = [{},{}]
-    for string in p:
+    for string in probs:
         substrings = [string[0:num_qubits], string[num_qubits::]]
         for j,substring in enumerate(substrings):
             if substring in marginals[j]:
-                marginals[j][substring] += p[string]
+                marginals[j][substring] += probs[string]
             else:
-                marginals[j][substring] = p[string]
+                marginals[j][substring] = probs[string]
     
-    # convert the prob dists to heights
+    return marginals
+
+
+def swap_heights(height0, height1, fraction, log=False, ):
+    """
+    Given a pair of height maps for the same sized grid, a set of partial
+    swaps is applied between corresponding qubits in each circuit.
+    
+    Args:
+        height0, height1 (dict): Dictionaries in which keys are coordinates
+            for points on a grid, and the values are floats in the range 0
+            to 1.
+        fraction (float): Fraction of swap gates to apply.
+        log (bool): If given, a logarithmic decoding is used.
+            
+    Returns:
+        new_height0, new_height1 (dict): As with the height inputs.
+    """
+
+    assert _get_size(height0)==_get_size(height1), \
+    "Objects to be swapped are not the same size"   
+    
+    # set up the circuit to be run
+    circuits = [height2circuit(height) for height in [height0,height1]]
+    combined_qc = combine_circuits(circuits[0], circuits[1])
+    partialswap(combined_qc, fraction)
+    
+    # run it an get the marginals for each original qubit register
+    p = _circuit2probs(combined_qc)           
+    marginals = probs2marginals(combined_qc, p)     
+    
+    # convert the marginals to heights
     new_heights = []
     for j,marginal in enumerate(marginals):
         new_heights.append( probs2height(circuits[j],marginal,log) )
