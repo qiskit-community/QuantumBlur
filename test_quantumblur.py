@@ -130,7 +130,7 @@ def odd_size():
     h = {}
     for x in range(3):
         for y in range(5):
-            h[x,y] = (x+y)/4
+            h[x,y] = float(x+y)/6
     
     # encode and decode height map
     qc = height2circuit(h)
