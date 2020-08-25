@@ -339,7 +339,7 @@ def height2circuit(height, log=False, eps=1e-2):
     state = normalize(state)
         
     # define and initialize quantum circuit            
-    qc = QuantumCircuit(n,n)
+    qc = QuantumCircuit(n)
     if simple_python:
         # microqiskit style
         qc.initialize(state)
@@ -416,55 +416,43 @@ def circuit2height(qc, log=False):
 
 def combine_circuits(qc0,qc1):
     """
-    Combines a pair of circuits in parallel.
-    
-    For MicroQiskit, this only works if the circuits contain only
-    initialization.
+    Combines a pair of initialization circuits in parallel
+    Creates a single register circuit with the combined number of qubits,
+    initialized with the tensor product state.s
     """
-    
-    if simple_python:
-    
-        warning = "Combined circuits should contain only initialization."
-    
-        # create a circuit with the combined number of qubits
-        num_qubits = qc0.num_qubits + qc1.num_qubits
-        combined_qc = QuantumCircuit(num_qubits)
 
-        # extract statevectors for any initialization commands
-        kets = [None,None]
-        for j,qc in enumerate([qc0, qc1]):
-            for gate in qc.data:
+    warning = "Combined circuits should contain only initialization."
+
+    # create a circuit with the combined number of qubits
+    num_qubits = qc0.num_qubits + qc1.num_qubits
+    combined_qc = QuantumCircuit(num_qubits)
+
+    # extract statevectors for any initialization commands
+    kets = [None,None]
+    for j,qc in enumerate([qc0, qc1]):
+        for gate in qc.data:
+            if simple_python:
                 assert gate[0]=='init', warning
                 kets[j] = gate[1]
+            else:
+                assert gate[0].name=='initialize', warning
+                kets[j] = gate[0].params
 
-        # combine into a statevector for all the qubits
-        ket = None
-        if kets[0] and kets[1]:
-            ket = _kron(kets[0], kets[1])
-        elif kets[0]:
-            ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
-        elif kets[1]:
-            ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
+    # combine into a statevector for all the qubits
+    ket = None
+    if kets[0] and kets[1]:
+        ket = _kron(kets[0], kets[1])
+    elif kets[0]:
+        ket = _kron(kets[0], [1]+[0]*(2**qc1.num_qubits-1))
+    elif kets[1]:
+        ket = _kron([1]+[0]*(2**qc0.num_qubits-1),kets[1])
 
-        # use this to initialize
-        if ket:
+    # use this to initialize
+    if ket:
+        if simple_python:
             combined_qc.initialize(ket)
-                    
-    else:
-
-        circuits = [qc0,qc1]
-        
-        # make sure the quantum registers have distinct names
-        qregs = [qc.qregs[0].name for qc in circuits]
-        for j,qc in enumerate(circuits):
-            qc.qregs[0].name = str(j)
-
-        # combine the circuits in parallel
-        combined_qc = circuits[0] + circuits[1]
-        
-        # restore the original names of the quantum registers
-        for j,qc in enumerate(circuits):
-            qc.qregs[0].name = qregs[j]
+        else:
+            combined_qc.initialize(ket,range(num_qubits))
             
     return combined_qc
 
@@ -485,14 +473,12 @@ def partialswap(combined_qc, fraction):
         ])
         U = fractional_matrix_power(U,fraction)
     for q in range(num_qubits):
+        q0 = q
+        q1 = num_qubits + q
         if not simple_python:
-            combined_qc.unitary(U, \
-                                [combined_qc.qregs[0][q],\
-                                 combined_qc.qregs[1][q]],\
+            combined_qc.unitary(U, [q0,q1],\
                                  label='partial_swap')
         else:
-            q0 = q
-            q1 = num_qubits + q
             combined_qc.cx(q1,q0)
             combined_qc.h(q1)
             combined_qc.cx(q0,q1)
