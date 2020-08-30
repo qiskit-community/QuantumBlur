@@ -350,7 +350,7 @@ def height2circuit(height, log=False, eps=1e-2):
     return qc
 
 
-def probs2height(size, probs, log=False):
+def probs2height(probs, size=None, log=False):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     a set of probabilities for the output of a quantum circuit into
@@ -369,7 +369,11 @@ def probs2height(size, probs, log=False):
     """
     
     # get grid info
-    (Lx,Ly) = size
+    if size:
+        (Lx,Ly) = size
+    else:
+        Lx = int(2**(len(list(probs.keys())[0])/2))
+        Ly = Lx
     grid,_ = make_grid(Lx,Ly)
     
     # set height to probs value, rescaled such that the maximum is 1
