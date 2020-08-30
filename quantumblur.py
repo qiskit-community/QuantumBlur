@@ -421,7 +421,7 @@ def combine_circuits(qc0,qc1):
     """
     Combines a pair of initialization circuits in parallel
     Creates a single register circuit with the combined number of qubits,
-    initialized with the tensor product state.s
+    initialized with the tensor product state.
     """
 
     warning = "Combined circuits should contain only initialization."
