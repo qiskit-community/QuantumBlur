@@ -414,7 +414,7 @@ def circuit2height(qc, log=False):
     """
     
     probs = _circuit2probs(qc)
-    return probs2height(qc, probs, log)
+    return probs2height(probs, size=eval(qc.name), log)
 
 
 def combine_circuits(qc0,qc1):
