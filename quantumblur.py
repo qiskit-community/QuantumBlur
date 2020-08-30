@@ -414,7 +414,7 @@ def circuit2height(qc, log=False):
     """
     
     probs = _circuit2probs(qc)
-    return probs2height(probs, size=eval(qc.name), log)
+    return probs2height(probs, size=eval(qc.name), log=log)
 
 
 def combine_circuits(qc0,qc1):
@@ -543,7 +543,7 @@ def swap_heights(height0, height1, fraction, log=False, ):
     # convert the marginals to heights
     new_heights = []
     for j,marginal in enumerate(marginals):
-        new_heights.append( probs2height(circuits[j],marginal,log) )
+        new_heights.append( probs2height(marginal,size=eval(circuits[j].name),log=log) )
         
     return new_heights[0], new_heights[1]
 
