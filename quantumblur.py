@@ -350,15 +350,14 @@ def height2circuit(height, log=False, eps=1e-2):
     return qc
 
 
-def probs2height(qc, probs, log=False):
+def probs2height(size, probs, log=False):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     a set of probabilities for the output of a quantum circuit into
     which the height map has been encoded.
     
     Args:
-        qc (QuantumCircuit): A quantum circuit which encodes a height
-            dictionary.
+        size (tuple): Size of the height map to be created.
         probs (dict): A dictionary with results from running the circuit.
             With bit strings as keys and either probabilities or counts as               values.
         log (bool): If given, a logarithmic decoding is used.
@@ -370,7 +369,7 @@ def probs2height(qc, probs, log=False):
     """
     
     # get grid info
-    (Lx,Ly) = eval(qc.name)
+    (Lx,Ly) = size
     grid,_ = make_grid(Lx,Ly)
     
     # set height to probs value, rescaled such that the maximum is 1
