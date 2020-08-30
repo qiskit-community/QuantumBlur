@@ -456,6 +456,9 @@ def combine_circuits(qc0,qc1):
             combined_qc.initialize(ket)
         else:
             combined_qc.initialize(ket,range(num_qubits))
+    
+    # prevent circuit name from being used for size determination
+    combined_qc.name = 'None'
             
     return combined_qc
 
