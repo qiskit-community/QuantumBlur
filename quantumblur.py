@@ -374,7 +374,7 @@ def probs2height(size, probs, log=False):
     
     # set height to probs value, rescaled such that the maximum is 1
     max_h = max( probs.values() )   
-    height = {(x,y):0 for x in range(Lx) for y in range(Ly)}
+    height = {(x,y):0.0 for x in range(Lx) for y in range(Ly)}
     for bitstring in probs:
         if bitstring in grid:
             height[grid[bitstring]] = float(probs[bitstring])/max_h
@@ -388,7 +388,7 @@ def probs2height(size, probs, log=False):
             if height[pos]>0:
                 height[pos] = max(math.log(height[pos]/min_h)/math.log(base),0)
             else:
-                height[pos] = 0
+                height[pos] = 0.0
                         
     return height
 
