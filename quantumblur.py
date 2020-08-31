@@ -404,7 +404,8 @@ def circuit2height(qc, log=False):
     
     Args:
         qc (QuantumCircuit): A quantum circuit which encodes a height
-            dictionary.
+            dictionary. The name attribute should hold the size of
+            the image to be created (as a tuple cast to a string).
         log (bool): If given, a logarithmic decoding is used.
             
     Returns:
