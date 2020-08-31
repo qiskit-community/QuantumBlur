@@ -357,9 +357,12 @@ def probs2height(probs, size=None, log=False):
     which the height map has been encoded.
     
     Args:
-        size (tuple): Size of the height map to be created.
         probs (dict): A dictionary with results from running the circuit.
-            With bit strings as keys and either probabilities or counts as               values.
+            With bit strings as keys and either probabilities or counts as
+            values.
+        size (tuple): Size of the height map to be created. If not given,
+            the size is deduced from the number of qubits (assuming a
+            square image).
         log (bool): If given, a logarithmic decoding is used.
             
     Returns:
