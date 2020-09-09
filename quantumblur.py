@@ -490,12 +490,7 @@ def partialswap(combined_qc, fraction):
                                  label='partial_swap')
         else:
             combined_qc.cx(q1,q0)
-            combined_qc.h(q1)
-            combined_qc.cx(q0,q1)
-            combined_qc.rz(-math.pi*fraction/2,q1)
-            combined_qc.cx(q0,q1)
-            combined_qc.rz(math.pi*fraction/2,q1)
-            combined_qc.h(q1)
+            combined_qc.crx(math.pi*fraction,q0,q1)
             combined_qc.cx(q1,q0)  
 
             
