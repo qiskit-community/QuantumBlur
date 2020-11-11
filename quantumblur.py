@@ -418,6 +418,13 @@ def circuit2height(qc, log=False):
     """
     
     probs = _circuit2probs(qc)
+    try:
+        # get size from circuit
+        size = eval(qc.name)
+    except:
+        # if not in circuit name, infer it from qubit number
+        L = int(2**(qc.num_qubits/2))
+        size = (L,L)
     return probs2height(probs, size=eval(qc.name), log=log)
 
 
