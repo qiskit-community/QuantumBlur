@@ -425,7 +425,7 @@ def circuit2height(qc, log=False):
         # if not in circuit name, infer it from qubit number
         L = int(2**(qc.num_qubits/2))
         size = (L,L)
-    return probs2height(probs, size=eval(qc.name), log=log)
+    return probs2height(probs, size=size, log=log)
 
 
 def combine_circuits(qc0,qc1):
