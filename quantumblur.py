@@ -165,6 +165,10 @@ def _circuit2probs(qc):
                 initial_ket = _kron(initial_ket,gate[0].params)
             else:
                 new_qc.data.append(gate)
+        # if there was no initialization, use the standard state        
+        if len(initial_ket)==1:
+            initial_ket = [0]*2**qc.num_qubits
+            initial_ket[0] = 1       
         # then run it
         ket = quantum_info.Statevector(initial_ket)
         ket = ket.evolve(new_qc)
