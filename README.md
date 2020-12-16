@@ -1,6 +1,6 @@
 # QuantumBlur
 
-A tool for doing strange things with height maps and images. This is the original Python version, but there is also a [Unity implementation](https://github.com/TigrisCallidus/QuantumBlurUnity/blob/master/README.md).
+A tool for doing quantum things with height maps and images. This is the original Python version, but there is also a [Unity implementation](https://github.com/TigrisCallidus/QuantumBlurUnity/blob/master/README.md).
 
 ## Requirements
 
