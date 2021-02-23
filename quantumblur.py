@@ -758,7 +758,7 @@ def blur_height(height, xi, axis='x', circuit=None, log=False):
     return circuit
 
 
-def blur_image(image, xi, circuits=[None,None,None], axis='x',log=False):
+def blur_image(image, xi, circuits=None, axis='x',log=False):
     """
     Applies a predetermined blur effect designed for a smooth blur.
     
@@ -777,6 +777,9 @@ def blur_image(image, xi, circuits=[None,None,None], axis='x',log=False):
     """       
 
     heights = _image2heights(image)
+    
+    if circuits==None:
+        circuits=[None,None,None]
     
     for j,height in enumerate(heights):
         circuits[j] = blur_height(height, xi, axis=axis, circuit=circuits[j], log=log)
