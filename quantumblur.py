@@ -881,7 +881,10 @@ def dotdot(L,diamond=0,delta=0,depth=0):
 
     # extend at top
     qc.rx(math.pi+dt(),1)
-    qc.crx(math.pi/2,1,nr+2)
+    if simple_python:
+        qc.crx(math.pi/2,1,nr+2)
+    else:
+        qc.ch(1,nr+2)
     qc.x(1)
 
     # cover with cz gates to entangle everything
