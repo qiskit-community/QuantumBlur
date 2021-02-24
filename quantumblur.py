@@ -854,14 +854,7 @@ def dotdot(L,diamond=0,delta=0,depth=0):
     r1 = [(line[j-1],line[j]) for j in range(1,n,2)]
     r2 = [(line[j-1],line[j]) for j in range(2,n,2)]
 
-    # set up the circuit in the format required by quantumblur
     qc = QuantumCircuit(n)
-    qc.name = '('+str(L)+','+str(L)+')'
-    ket = [j==0 for j in range(int(2**n))]
-    if simple_python:
-        qc.initialize(ket)
-    else:
-        qc.initialize(ket,range(n))
 
     # fill
     fill_qubits = []
