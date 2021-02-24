@@ -43,6 +43,7 @@ https://github.com/qiskit-community/MicroQiskit
 """
 
 import math
+import random
 
 # determine whether qiskit can be used, or whether to default to
 # MicroQiskit and the standard library
@@ -786,3 +787,113 @@ def blur_image(image, xi, circuits=None, axis='x',log=False):
         
 
     return circuits
+
+
+def dotdot(L,diamond=0,delta=0,depth=0):
+    """
+    Creates a circuit for a heightmap depicting the letteer 'I'.
+    The circuit is designed to be low-depth and compatible with near-term devices.
+    
+    Args:
+        L (int): Linear size of the image. Must be at least 32.
+        diamond (float): Degree to which filling is done with a diamond effect (maximum at 1).
+        delta (float): Strength of random variations to all rotations made (no randomness when 0).
+        depth (int): Depth of a final random circuit using rotations, using rotations of strength
+            delta and entangling gates.
+            
+    Returns:
+        qc (QuantumCircuit): Quantum circuit encoding the height map
+        line (list): A list of qubits, ordered such that all entangling gates are between neighbours.
+    """
+    
+    def dt():
+        if delta!=0:
+            return delta*random.random()*math.pi/2
+        else:
+            return 0
+    
+    # make sure L is a compatible value (a power of 2 and >= 32)
+    assert L>=32, 'Size must be at least 32x32 pixels.'
+    L = int(2**math.ceil(math.log(L)/math.log(2)))
+
+    # qubits per register for I shape
+    ni = 5
+
+    # qubits per register for fill
+    nf = int(math.log(L/2**ni)/math.log(2))
+
+    # total qubits per register
+    nr = ni + nf
+    # and total
+    n = 2*nr
+
+    # entangling gates on the following pairs are required
+    pair_extend = (1,nr+2)
+    pairs_fill = [(ni+j,ni+nr+j) for j in range(nf)]
+
+    # we assume qubits are on a line such that these pairs are neigbours
+    line = list(pair_extend)
+    for pair in pairs_fill:
+        line += list(pair)
+    for j in range(n):
+        if j not in line:
+            line.append(j)
+
+    # two sets of disjoint pairs cover this line
+    r1 = [(line[j-1],line[j]) for j in range(1,n,2)]
+    r2 = [(line[j-1],line[j]) for j in range(2,n,2)]
+
+    # set up the circuit in the format required by quantumblur
+    qc = QuantumCircuit(n)
+    qc.name = '('+str(L)+','+str(L)+')'
+    ket = [j==0 for j in range(int(2**n))]
+    if simple_python:
+        qc.initialize(ket)
+    else:
+        qc.initialize(ket,range(n))
+
+    # fill
+    fill_qubits = []
+    for c,t in pairs_fill:
+        qc.ry(math.pi/2+dt(),c)
+        # for full fill, use theta=pi/2 here
+        theta = (1-diamond)*math.pi/2
+        qc.rx(theta,t)
+        # otherwise, this cx gives a diamond effect
+        if diamond!=0:
+            qc.cx(c,t)
+
+    # horizontal lines
+    qc.rx(math.pi+dt(),ni-1)
+    for j in [0,2,3]:
+        qc.rx(math.pi/2+dt(),j)
+    qc.rx(0.39*math.pi+dt(),1)
+
+    # central bar
+    qc.rx(math.pi+dt(),nr+1)
+    qc.ry(math.pi/2+dt(),nr+4)
+    qc.ry(math.pi/2+dt(),nr)
+    qc.ry(math.pi/2+dt(),nr+3)
+
+    # extend at top
+    qc.rx(math.pi+dt(),1)
+    qc.crx(math.pi/2,1,nr+2)
+    qc.x(1)
+
+    # cover with cz gates to entangle everything
+    for c,t in r1+r2:
+        qc.cz(c,t)
+        
+    if delta!=0:
+        for _ in range(depth):
+            for j in range(n):
+                qc.rx(dt(),j)
+            for c,t in r1+r2:
+                if simple_python:
+                    qc.h(t)
+                    qc.cx(c,t)
+                    qc.h(t)
+                else:
+                    qc.cz(c,t)
+
+    return qc, line
