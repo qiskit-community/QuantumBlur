@@ -166,6 +166,10 @@ def _circuit2probs(qc):
                 initial_ket = _kron(initial_ket,gate[0].params)
             else:
                 new_qc.data.append(gate)
+        # if there was no initialization, use the standard state        
+        if len(initial_ket)==1:
+            initial_ket = [0]*2**qc.num_qubits
+            initial_ket[0] = 1       
         # then run it
         ket = quantum_info.Statevector(initial_ket)
         ket = ket.evolve(new_qc)
@@ -419,7 +423,14 @@ def circuit2height(qc, log=False):
     """
     
     probs = _circuit2probs(qc)
-    return probs2height(probs, size=eval(qc.name), log=log)
+    try:
+        # get size from circuit
+        size = eval(qc.name)
+    except:
+        # if not in circuit name, infer it from qubit number
+        L = int(2**(qc.num_qubits/2))
+        size = (L,L)
+    return probs2height(probs, size=size, log=log)
 
 
 def combine_circuits(qc0,qc1):
