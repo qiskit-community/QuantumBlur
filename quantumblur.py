@@ -819,7 +819,7 @@ def dotdot(L,diamond=0,delta=0,depth=0):
     
     def dt():
         if delta!=0:
-            return delta*random.random()*math.pi/2
+            return delta*(0.5-random.random())*math.pi
         else:
             return 0
     
