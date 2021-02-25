@@ -14,7 +14,7 @@ The latter is recommended, but the former is more flexible to running everything
 
 ## Installation
 
-You just need the file [quantumblur.py](quantumblur/quantumblur.py) somewhere importable. You can do this with a simple copy/paste, but you can also pip install this repository.
+You just need the file [quantumblur.py](quantumblur/quantumblur.py) somewhere importable. You can do this with a simple copy/paste, but you can also pip install this repository with the following command.
 ```
 pip install git+https://github.com/qiskit-community/QuantumBlur.git
 ```
