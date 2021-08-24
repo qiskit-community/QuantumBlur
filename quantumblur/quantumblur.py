@@ -150,7 +150,7 @@ def _get_size(height):
     return Lx,Ly
 
 
-def _circuit2probs(qc):
+def circuit2probs(qc):
     """
     Runs the given circuit, and returns the resulting probabilities.
     """
@@ -422,7 +422,7 @@ def circuit2height(qc, log=False):
             range 0 to 1.
     """
     
-    probs = _circuit2probs(qc)
+    probs = circuit2probs(qc)
     try:
         # get size from circuit
         size = eval(qc.name)
@@ -551,7 +551,7 @@ def swap_heights(height0, height1, fraction, log=False, ):
     partialswap(combined_qc, fraction)
     
     # run it an get the marginals for each original qubit register
-    p = _circuit2probs(combined_qc)           
+    p = circuit2probs(combined_qc)           
     marginals = probs2marginals(combined_qc, p)     
     
     # convert the marginals to heights
