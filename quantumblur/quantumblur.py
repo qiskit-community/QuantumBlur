@@ -744,7 +744,8 @@ def blur_height(height, xi, axis='x', circuit=None, log=False):
                             axes.append(n-j-1)
             # add the height at this point to the rates for each of these
             for j in axes:
-                rates[j] += height[x,y]
+                if (x,y) in height:
+                    rates[j] += height[x,y]
 
     # normalize the rates
     max_rate = max(rates)
