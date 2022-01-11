@@ -181,7 +181,7 @@ def circuit2probs(qc):
 def _image2heights(image):
     """
     Converts an rgb image into a list of three height dictionaries, one for
-    each colour channgel.
+    each colour channel.
     """
     Lx,Ly = image.size
     heights = [{} for j in range(3)]
