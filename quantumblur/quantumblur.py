@@ -19,7 +19,7 @@ The imports that follow are highly non-standard and require some explanation.
 This file is designed to run in both a modern, fully functioning Python
 environment, with Python 3.x and the ability to use external libraries.
 It is also designed to function using only the standard library (in
-addition to MicroQiskit) in any Python from 2.7 onwards.
+addition to MicroMoth) in any Python from 2.7 onwards.
 
 The deciding factor is whether Qiskit is available to be imported. If so,
 the following external libraries are required dependencies:
@@ -29,7 +29,7 @@ numpy
 scipy
 PIL
 
-Otherwise, MicroQiskit will be used in place of Qiskit, and alternative
+Otherwise, MicroMoth will be used in place of Qiskit, and alternative
 techniques using only the standard library will be used in place of the
 other dependencies.
 
@@ -37,22 +37,22 @@ More information on Qiskit can be found at
 
 https://qiskit.org
 
-and information on MicroQiskit can be found at
+and information on MicroMoth can be found at
 
-https://github.com/qiskit-community/MicroQiskit
+https://github.com/moth-quantum/MicroMoth
 """
 
 import math
 import random
 
 # determine whether qiskit can be used, or whether to default to
-# MicroQiskit and the standard library
+# MicrMoth and the standard library
 try:
     from qiskit import QuantumCircuit, quantum_info
     simple_python = False
 except:
-    print('Unable to import Qiskit, so MicroQiskit will be used instead')
-    from microqiskit import QuantumCircuit, simulate
+    print('Unable to import Qiskit, so MicroMoth will be used instead')
+    from micromoth import QuantumCircuit, simulate
     simple_python = True
 
     
@@ -346,7 +346,7 @@ def height2circuit(height, log=False, eps=1e-2):
     # define and initialize quantum circuit            
     qc = QuantumCircuit(n)
     if simple_python:
-        # microqiskit style
+        # micromoth style
         qc.initialize(state)
     else:
         qc.initialize(state,range(n))
