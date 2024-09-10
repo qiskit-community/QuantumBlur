@@ -7,7 +7,7 @@ In this respository is a Python version of the source code, but there is also a 
 ## Requirements
 
 Either of the following:
-* Python 3.7 and beyond with Qiskit, NumPy, SciPy and PIL.
+* Python 3.9 and beyond with Qiskit, NumPy, SciPy and PIL.
 * Any Python from 2.7 and beyond, with only the standard library and [MicroMoth](https://github.com/moth-quantum/MicroMoth) (A minimal quantum SDK, previously known as [MicroQiskit](https://github.com/qiskit-community/MicroQiskit));
 
 The former is recommended, but the latter is more flexible to running everything in strange places.
