@@ -763,9 +763,9 @@ def blur_height(height, xi, axis='x', circuit=None, log=False):
             
     # add to initial circuit
     if circuit:
-        circuit = circuit + qc_rot
+        circuit = circuit.compose(qc_rot)
     else:
-        circuit = height2circuit(height,log=log) + qc_rot
+        circuit = height2circuit(height,log=log).compose(qc_rot)
     circuit.name = '('+str(Lx)+','+str(Ly)+')'
         
     return circuit
