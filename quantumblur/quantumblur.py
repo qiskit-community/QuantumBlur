@@ -49,6 +49,7 @@ import random
 # MicrMoth and the standard library
 try:
     from qiskit import QuantumCircuit, quantum_info
+    from qiskit.circuit.library import StatePreparation
     simple_python = False
 except:
     print('Unable to import Qiskit, so MicroMoth will be used instead')
@@ -304,7 +305,45 @@ def make_grid(Lx,Ly=None):
     return grid, n
 
 
-def height2circuit(height, log=False, eps=1e-2):
+def make_strip(offset, Lx):
+    """
+    Creates a dictionary that provides bit strings corresponding to
+    points within a grid along a strip of width Lx and height Ly.
+    At each height y, each row of the strip is offset by an amount
+    offset[y].
+    
+    Args:
+        offset (list): List of offsets.
+        Lx (int): Width of the lattice.
+    
+    Returns:
+        grid (dict): Dictionary whose values are points on an
+            Lx by Ly grid. The corresponding keys are unique bit
+            strings such that neighbouring strings differ on only
+            one bit.
+        n (int): Length of the bit strings
+        
+    """
+    # get the required input info
+    Ly = len(offset)
+
+    # make the lines
+    line_x = make_line( Lx )
+    line_y = make_line( Ly )
+
+    # make the grid
+    grid = {}
+    for y in range(Ly):
+        for x in range(offset[y], offset[y]+Lx):
+            grid[ line_x[x%Lx]+line_y[y] ] = (x,y)
+
+    # determine length of the bit strings
+    n = len(line_x[0]+line_y[0])
+            
+    return grid, n
+
+
+def height2circuit(height, log=False, eps=1e-2, grid=None):
     """
     Converts a dictionary of heights (or brightnesses) on a grid into
     a quantum circuit.
@@ -321,7 +360,10 @@ def height2circuit(height, log=False, eps=1e-2):
     """
     # get bit strings for the grid
     Lx,Ly = _get_size(height)
-    grid, n = make_grid(Lx,Ly)
+    if grid == None:
+        grid, n = make_grid(Lx,Ly)
+    else:
+        n = len(list(grid.keys())[0])
     
     # create required state vector
     state = [0]*(2**n)
@@ -349,13 +391,13 @@ def height2circuit(height, log=False, eps=1e-2):
         # micromoth style
         qc.initialize(state)
     else:
-        qc.initialize(state,range(n))
+        qc.append(StatePreparation(state), range(n))
     qc.name = '('+str(Lx)+','+str(Ly)+')'
 
     return qc
 
 
-def probs2height(probs, size=None, log=False):
+def probs2height(probs, size=None, log=False, grid=None):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     a set of probabilities for the output of a quantum circuit into
@@ -382,7 +424,8 @@ def probs2height(probs, size=None, log=False):
     else:
         Lx = int(2**(len(list(probs.keys())[0])/2))
         Ly = Lx
-    grid,_ = make_grid(Lx,Ly)
+    if grid == None:
+        grid, n = make_grid(Lx,Ly)
     
     # set height to probs value, rescaled such that the maximum is 1
     max_h = max( probs.values() )   
@@ -405,7 +448,7 @@ def probs2height(probs, size=None, log=False):
     return height
 
     
-def circuit2height(qc, log=False):
+def circuit2height(qc, log=False, grid=None):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     the quantum circuit into which it has been encoded.
@@ -430,7 +473,7 @@ def circuit2height(qc, log=False):
         # if not in circuit name, infer it from qubit number
         L = int(2**(qc.num_qubits/2))
         size = (L,L)
-    return probs2height(probs, size=size, log=log)
+    return probs2height(probs, size=size, log=log, grid=grid)
 
 
 def combine_circuits(qc0,qc1):
@@ -620,7 +663,7 @@ def swap_images(image0, image1, fraction, log=False):
 
     return new_image0, new_image1
 
-def image2circuits(image, log=False):
+def image2circuits(image, log=False, grid=None):
     """
     Converts an image to a set of three circuits, with one corresponding to
     each RGB colour channel.
@@ -637,7 +680,7 @@ def image2circuits(image, log=False):
 
     circuits = []
     for height in heights:
-        circuits.append( height2circuit(height, log=log) )
+        circuits.append( height2circuit(height, log=log, grid=grid) )
 
     return circuits
 
@@ -702,7 +745,7 @@ def row_swap_images(image0, image1, fraction, log=False):
     return new_images[0], new_images[1]
 
 
-def blur_height(height, xi, axis='x', circuit=None, log=False):
+def blur_height(height, xi, axis='x', circuit=None, log=False, grid=None):
     """
     Applies a predetermined blur effect designed for a smooth blur.
     
@@ -725,7 +768,10 @@ def blur_height(height, xi, axis='x', circuit=None, log=False):
     
     # get size and bit strings for the grid
     Lx,Ly = _get_size(height)
-    grid, n = make_grid(Lx,Ly)
+    if grid == None:
+        grid, n = make_grid(Lx,Ly)
+    else:
+        n = len(list(grid.keys())[0])
     # invert grid dict to have coords as keys
     coord_grid = {grid[string]:string for string in grid}
     
