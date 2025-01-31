@@ -405,7 +405,7 @@ def height2circuit(height, log=False, eps=1e-2, grid=None):
     return qc
 
 
-def probs2height(probs, size=None, log=False, grid=None):
+def probs2height(probs, size=None, log=False, grid=None, min_h=None):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     a set of probabilities for the output of a quantum circuit into
@@ -446,7 +446,8 @@ def probs2height(probs, size=None, log=False, grid=None):
          
     # take logs if required
     if log:
-        min_h = min([height[pos] for pos in height if height[pos] > 1e-100])
+        if min_h == None:
+            min_h = min([height[pos] for pos in height if height[pos] > 1e-100])
         base = 1/min_h
         for pos in height:
             if height[pos]>1e-100:
