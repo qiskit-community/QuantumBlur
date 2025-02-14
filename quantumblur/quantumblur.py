@@ -49,7 +49,8 @@ import random
 # MicrMoth and the standard library
 try:
     from qiskit import QuantumCircuit, quantum_info
-    from qiskit.circuit.library import StatePreparation
+    from qiskit_aer import AerSimulator
+    from qiskit_aer.library import SaveStatevectorDict
     simple_python = False
 except:
     print('Unable to import Qiskit, so MicroMoth will be used instead')
@@ -158,23 +159,12 @@ def circuit2probs(qc):
     if simple_python:
         probs = simulate(qc,get='probabilities_dict')
     else:
-        # separate circuit and initialization
-        new_qc = qc.copy()
-        new_qc.data = []
-        initial_ket = [1]
-        for gate in qc.data:
-            if gate[0].name=='initialize':
-                initial_ket = _kron(initial_ket,gate[0].params)
-            else:
-                new_qc.data.append(gate)
-        # if there was no initialization, use the standard state        
-        if len(initial_ket)==1:
-            initial_ket = [0]*2**qc.num_qubits
-            initial_ket[0] = 1       
-        # then run it
-        ket = quantum_info.Statevector(initial_ket)
-        ket = ket.evolve(new_qc)
-        probs = ket.probabilities_dict()
+        qc_run = qc.copy()
+        qc_run.append(SaveStatevectorDict(qc.num_qubits),qc.qregs[0])
+        rawprobs = AerSimulator().run(qc_run,shots=1).result().data()['statevector_dict']
+        probs = {}
+        for string, prob in rawprobs.items():
+            probs[str(bin(int(string,16))[2::].zfill(qc.num_qubits))] = np.real(prob)
     
     return probs
 
@@ -399,13 +389,13 @@ def height2circuit(height, log=False, eps=1e-2, grid=None):
         # micromoth style
         qc.initialize(state)
     else:
-        qc.append(StatePreparation(state), range(n))
+        qc.initialize(state, range(n))
     qc.name = '('+str(Lx)+','+str(Ly)+')'
 
     return qc
 
 
-def probs2height(probs, size=None, log=False, grid=None):
+def probs2height(probs, size=None, log=False, grid=None, min_h=None):
     """
     Extracts a dictionary of heights (or brightnesses) on a grid from
     a set of probabilities for the output of a quantum circuit into
@@ -508,7 +498,7 @@ def combine_circuits(qc0,qc1):
                 assert gate[0]=='init', warning
                 kets[j] = gate[1]
             else:
-                assert gate[0].name=='state_preparation', warning
+                assert gate[0].name=='initialize', warning
                 kets[j] = gate[0].params
 
     # combine into a statevector for all the qubits
