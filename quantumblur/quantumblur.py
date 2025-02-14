@@ -161,10 +161,10 @@ def circuit2probs(qc):
     else:
         qc_run = qc.copy()
         qc_run.append(SaveStatevectorDict(qc.num_qubits),qc.qregs[0])
-        rawprobs = AerSimulator().run(qc_run,shots=1).result().data()['statevector_dict']
+        rawamps = AerSimulator().run(qc_run,shots=1).result().data()['statevector_dict']
         probs = {}
-        for string, prob in rawprobs.items():
-            probs[str(bin(int(string,16))[2::].zfill(qc.num_qubits))] = np.real(prob)
+        for string, amp in rawamps.items():
+            probs[str(bin(int(string,16))[2::].zfill(qc.num_qubits))] = np.abs(amp)**2
     
     return probs
 
