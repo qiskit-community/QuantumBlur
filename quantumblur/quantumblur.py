@@ -169,27 +169,37 @@ def circuit2probs(qc):
     return probs
 
 
-def _image2heights(image):
+def image2heights(image, fold = False):
     """
     Converts an rgb image into a list of three height dictionaries, one for
     each colour channel.
     """
     Lx,Ly = image.size
+    maxLx = int(2**np.ceil(np.log2(Lx)))
+    maxLy = int(2**np.ceil(np.log2(Ly)))
+
     heights = [{} for j in range(3)]
-    for x in range(Lx):
-        for y in range(Ly):
-            rgb = image.getpixel((x,y))
+    for x in range(maxLx):
+        for y in range(maxLy):
+            if not fold and (x>=Lx or y>=Ly):
+                continue
+            rgb = image.getpixel((Lx-1-abs(x-Lx+1),Ly-1-abs(y-Ly+1)))
             for j in range(3):
                 heights[j][x,y] = rgb[j]
 
     return heights
 
 
-def _heights2image(heights):
+def heights2image(heights, rescale = None):
     """
     Constructs an image from a set of three height dictionaries, one for each
     colour channel.
     """
+    if rescale==None:
+        rescale = [1]*len(heights)
+    
+    assert len(rescale)==len(heights), "Rescale list must be the same length as the number of height maps"
+    
     Lx,Ly = _get_size(heights[0])
     h_max = [max(height.values()) for height in heights]
 
@@ -199,7 +209,7 @@ def _heights2image(heights):
             rgb = []
             for j,height in enumerate(heights):
                 if (x,y) in height:
-                    h = float(height[x,y])/h_max[j]
+                    h = rescale[j]*float(height[x,y])/h_max[j]
                 else:
                     h = 0
                 rgb.append( int(255*h) )
@@ -339,7 +349,7 @@ def make_strip(offset, Lx, rotate=False):
     return grid, n
 
 
-def height2circuit(height, log=False, eps=1e-2, grid=None):
+def height2circuit(height, log=False, eps=1e-2, grid=None, default_height=0):
     """
     Converts a dictionary of heights (or brightnesses) on a grid into
     a quantum circuit.
@@ -364,7 +374,7 @@ def height2circuit(height, log=False, eps=1e-2, grid=None):
         n = len(list(grid.keys())[0])
     
     # create required state vector
-    state = [0]*(2**n)
+    state = [default_height]*(2**n)
     if log:
         # normalize heights
         max_h = max(height.values())
@@ -649,8 +659,8 @@ def swap_images(image0, image1, fraction, log=False):
     Returns:
         new_image0, new_image1 (Image): RGB encoded images.
     """
-    heights0 = _image2heights(image0)
-    heights1 = _image2heights(image1)
+    heights0 = image2heights(image0)
+    heights1 = image2heights(image1)
 
     new_heights0 = []
     new_heights1 = []
@@ -659,8 +669,8 @@ def swap_images(image0, image1, fraction, log=False):
         new_heights0.append(nh0)
         new_heights1.append(nh1)
 
-    new_image0 = _heights2image(new_heights0)
-    new_image1 = _heights2image(new_heights1)
+    new_image0 = heights2image(new_heights0)
+    new_image1 = heights2image(new_heights1)
 
     return new_image0, new_image1
 
@@ -679,7 +689,7 @@ def image2circuits(image, log=False, grid=None):
         circuits (list): A list of quantum circuits encoding the image.
     """
 
-    heights = _image2heights(image)
+    heights = image2heights(image)
 
     circuits = []
     for height in heights:
@@ -704,7 +714,7 @@ def circuits2image(circuits, log=False):
     for qc in circuits:
         heights.append( circuit2height(qc, log=log) )
 
-    return _heights2image(heights)
+    return heights2image(heights)
 
 
 def row_swap_images(image0, image1, fraction, log=False):
@@ -748,7 +758,7 @@ def row_swap_images(image0, image1, fraction, log=False):
     return new_images[0], new_images[1]
 
 
-def blur_height(height, xi, axis='x', circuit=None, log=False, grid=None):
+def blur_height(height, xi, locality=1,axis='x', circuit=None, log=False, grid=None):
     """
     Applies a predetermined blur effect designed for a smooth blur.
     
@@ -758,6 +768,7 @@ def blur_height(height, xi, axis='x', circuit=None, log=False, grid=None):
             any type.
         xi (float): Fraction of pi rotation to apply on the qubit for
             which the largest rotation is aplied
+        locality (float): A parameter controlling the locality of the blur effect.
         axis (string): `rx` rotations are used when this is `'x'`, and
             `ry` rotations are used otherwise.
         circuit (QuantumCircuit): Rotations are applied to the given circuit
@@ -806,7 +817,7 @@ def blur_height(height, xi, axis='x', circuit=None, log=False, grid=None):
     # make the circuit the rotation
     qc_rot = QuantumCircuit(n)
     for j in range(n):
-        theta = np.pi*rates[j]*np.pi*xi
+        theta = np.pi*(locality*rates[j]+(1-locality))*xi
         if axis=='x':
             qc_rot.rx(theta,j)
         else:
@@ -822,7 +833,7 @@ def blur_height(height, xi, axis='x', circuit=None, log=False, grid=None):
         if simple_python:
             circuit = height2circuit(height,log=log) + qc_rot
         else:
-            circuit = circuit = height2circuit(height,log=log).compose(qc_rot)
+            circuit = height2circuit(height,log=log).compose(qc_rot)
 
     circuit.name = '('+str(Lx)+','+str(Ly)+')'
         
@@ -847,7 +858,7 @@ def blur_image(image, xi, circuits=None, axis='x',log=False):
         circuits (list): Circuits on which the blur effect has been
     """       
 
-    heights = _image2heights(image)
+    heights = image2heights(image)
     
     if circuits==None:
         circuits=[None,None,None]
